@@ -1,0 +1,84 @@
+/* The design tokens and shared controls the dashboard page expects from its engine. */
+:root {
+  color-scheme: light dark;
+  --font-anthropic-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-anthropic-serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --color-bg: #faf9f6;
+  --color-panel: #f2f0ea;
+  --color-fg: #1f1e1b;
+  --color-fg-muted: #6b6860;
+  --color-border-line: #dedbd2;
+  --color-ok: #1f7a4d;
+  --color-warn: #a66300;
+  --color-bad: #b42318;
+  --cds-text-secondary: #6b6860;
+  --cds-chart-grid: #e6e3db;
+  --cds-chart-axis: #b9b5aa;
+  --cds-surface-popover: #ffffff;
+  --cds-border: #dedbd2;
+  --cds-shadow-popover: 0 6px 24px rgba(20, 18, 14, .12);
+  --cds-gap-xs: 4px;
+  --cds-gap-sm: 8px;
+  --cds-gap-md: 12px;
+  --cds-gap-lg: 20px;
+  --cds-gap-xl: 28px;
+  --cds-pad-md: 12px;
+  --cds-pad-lg: 16px;
+  --cds-radius: 8px;
+  --cds-font-size-caption: 12.5px;
+  --cds-font-size-body: 14px;
+  --cds-font-size-heading: 18px;
+  --cds-font-size-title: 30px;
+  --cds-font-weight-medium: 600;
+  --cds-dur-slow: .3s;
+  --cds-ease-out: cubic-bezier(.2, .7, .2, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #1c1b19;
+    --color-panel: #262522;
+    --color-fg: #eceae4;
+    --color-fg-muted: #a29f96;
+    --color-border-line: #3a3833;
+    --color-ok: #5cc28c;
+    --color-warn: #e0a345;
+    --color-bad: #f07a6e;
+    --cds-text-secondary: #a29f96;
+    --cds-chart-grid: #33312d;
+    --cds-chart-axis: #5a5750;
+    --cds-surface-popover: #2c2b28;
+    --cds-border: #3a3833;
+    --cds-shadow-popover: 0 6px 24px rgba(0, 0, 0, .45);
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--color-bg); color: var(--color-fg); }
+body { font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); -webkit-text-size-adjust: 100%; }
+.oh-page { max-width: 1240px; margin: 0 auto; padding: 28px 16px 48px; }
+@media (max-width: 560px) { :root { --cds-font-size-title: 24px; } .oh-page { padding-top: 20px; } }
+
+.dash-select {
+  font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg);
+  background-color: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius);
+  padding: 6px 30px 6px 10px; min-height: 34px; max-width: 100%; cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+.dash-select:hover { border-color: var(--color-fg-muted); }
+.dash-select:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+
+.dash-skeleton { position: relative; color: transparent !important; }
+.dash-skeleton::after {
+  content: ""; position: absolute; inset: 2px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--color-panel), var(--color-border-line), var(--color-panel));
+  background-size: 200% 100%; animation: dash-shimmer 1.4s linear infinite;
+}
+@keyframes dash-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .dash-skeleton::after { animation: none; } }
+
+/* This copy has no live Meta access: no manual refresh and no Instagram preview. */
+#oh-refresh, .oh-card-actions button.oh-link, #ad-preview-panel { display: none !important; }
+.oh-copy-foot { margin-top: 40px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }

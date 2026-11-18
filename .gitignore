@@ -1,0 +1,6 @@
+# Meta numbers and built pages never go in the repository: only the locked page, on gh-pages.
+data/
+out/
+*.plain.html
+.DS_Store
+.claude/

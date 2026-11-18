@@ -1,0 +1,1674 @@
+<meta name="dash-one-writer">
+<style>
+.oh { display: flex; flex-direction: column; gap: var(--cds-gap-xl); color: var(--color-fg); font-family: var(--font-anthropic-sans); }
+.oh-view { display: flex; flex-direction: column; gap: var(--cds-gap-xl); min-width: 0; }
+.oh-head { display: flex; flex-direction: column; gap: var(--cds-gap-sm); }
+.oh-title { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); line-height: 1.15; text-wrap: balance; }
+.oh-lede { margin: 0; max-width: 72ch; color: var(--color-fg-muted); font-size: var(--cds-font-size-body); line-height: 1.55; text-wrap: pretty; }
+.oh-lede b { color: var(--color-fg); font-weight: var(--cds-font-weight-medium); font-variant-numeric: tabular-nums; }
+.oh-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--cds-gap-md); }
+.oh-field { display: flex; flex-direction: column; gap: var(--cds-gap-xs); min-width: 0; max-width: 100%; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); letter-spacing: .02em; }
+.oh-field select { max-width: 100%; }
+.oh-field--camp select { width: min(340px, 100%); }
+.oh-camp-note { max-width: 72ch; font-size: var(--cds-font-size-body); color: var(--color-fg-muted); }
+.oh-camp-note b { color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+.oh-refresh { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-gap-sm); margin-left: auto; }
+.oh-btn { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background-color: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 14px; cursor: pointer; }
+.oh-btn:hover:not([disabled]) { border-color: var(--color-fg-muted); }
+.oh-btn[disabled] { opacity: .55; cursor: default; }
+.oh-link { font: inherit; color: var(--color-fg); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--color-border-line); }
+.oh-link:hover { text-decoration-color: currentColor; }
+.oh-btn:focus-visible, .oh-link:focus-visible, .oh-sort:focus-visible, .oh-table tbody tr:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.oh-note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); line-height: 1.45; }
+.oh-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--cds-gap-md); }
+.oh-tile { display: flex; flex-direction: column; gap: var(--cds-gap-xs); min-width: 0; padding: var(--cds-pad-lg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); }
+.oh-tile-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); letter-spacing: .02em; }
+.oh-tile-value { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); line-height: 1.1; font-variant-numeric: tabular-nums; min-height: 1.1em; overflow-wrap: anywhere; }
+.oh-tile-sub { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.oh-section { display: flex; flex-direction: column; gap: var(--cds-gap-sm); min-width: 0; }
+.oh-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--cds-gap-xs) var(--cds-gap-md); }
+.oh-h2 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); text-wrap: balance; }
+.oh-chart { position: relative; min-height: 220px; }
+.oh-chart svg { display: block; max-width: 100%; }
+.oh-chart text { fill: var(--cds-text-secondary); font-size: var(--cds-font-size-caption); font-family: var(--font-anthropic-sans); }
+.oh-chart .oh-grid line { stroke: var(--cds-chart-grid); }
+.oh-chart .oh-base { stroke: var(--cds-chart-axis); }
+.oh-chart .oh-bar.is-hover { opacity: .7; }
+.oh-chart-msg { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.oh-tip { position: absolute; top: 0; left: 0; z-index: 3; pointer-events: none; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.oh-tip strong { font-weight: var(--cds-font-weight-medium); }
+.oh-tip span { color: var(--cds-text-secondary); }
+.oh-tablewrap { overflow-x: auto; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); }
+.oh-tablewrap.dash-skeleton { min-height: 160px; }
+.oh-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--cds-font-size-body); font-variant-numeric: tabular-nums; }
+.oh-table th, .oh-table td { padding: 8px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--color-border-line); }
+.oh-table tbody tr:last-child td { border-bottom: 0; }
+.oh-table th { font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); background: var(--color-panel); vertical-align: bottom; }
+.oh-table th:first-child, .oh-table td:first-child { position: sticky; left: 0; z-index: 1; text-align: left; white-space: normal; min-width: 200px; max-width: 340px; background: var(--color-bg); box-shadow: 1px 0 0 var(--color-border-line); }
+.oh-table th:first-child { background: var(--color-panel); z-index: 2; }
+.oh-table.is-pickable tbody tr { cursor: pointer; }
+.oh-table.is-pickable tbody tr:hover td, .oh-table tbody tr.is-selected td { background: var(--color-panel); }
+.oh-name { display: block; font-weight: var(--cds-font-weight-medium); overflow-wrap: anywhere; }
+.oh-sub { display: block; margin-top: 2px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.oh-dim { color: var(--color-fg-muted); }
+.oh-sort { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+.oh-sort::after { content: ""; display: inline-block; width: 1em; text-align: center; }
+th[aria-sort="descending"] .oh-sort::after { content: "↓"; }
+th[aria-sort="ascending"] .oh-sort::after { content: "↑"; }
+th[aria-sort="descending"] .oh-sort, th[aria-sort="ascending"] .oh-sort { color: var(--color-fg); }
+.oh-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: var(--cds-font-size-caption); border: 1px solid var(--color-border-line); color: var(--color-fg-muted); }
+.oh-pill--ok { color: var(--color-ok); border-color: color-mix(in srgb, var(--color-ok) 45%, transparent); background: color-mix(in srgb, var(--color-ok) 10%, transparent); }
+.oh-pill--warn { color: var(--color-warn); border-color: color-mix(in srgb, var(--color-warn) 45%, transparent); }
+.oh-pill--bad { color: var(--color-bad); border-color: color-mix(in srgb, var(--color-bad) 45%, transparent); background: color-mix(in srgb, var(--color-bad) 10%, transparent); }
+.oh-table th.oh-purpose, .oh-table td.oh-purpose { text-align: left; }
+.oh-tag { display: inline-flex; align-items: center; gap: 6px; font-size: var(--cds-font-size-caption); color: var(--color-fg); }
+.oh-tag i, .oh-dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--color-fg-muted); }
+.oh-tile-label .oh-dot { margin-right: 6px; vertical-align: 1px; }
+.oh-aud { display: block; margin-top: 4px; font-size: var(--cds-font-size-caption); line-height: 1.45; color: var(--color-fg); }
+#adset-table td:first-child { min-width: 260px; max-width: 440px; }
+.oh-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--cds-gap-md); }
+.oh-card { display: flex; flex-direction: column; gap: var(--cds-gap-xs); min-width: 0; padding: var(--cds-pad-md); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); }
+.oh-card-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.oh-card-format { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); letter-spacing: .02em; }
+.oh-card-name { margin: 0; font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); overflow-wrap: anywhere; }
+.oh-card-stats, .oh-card-meta { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.oh-card-headline { margin: 0; font-weight: var(--cds-font-weight-medium); overflow-wrap: anywhere; }
+.oh-card-body { margin: 0; white-space: pre-line; overflow-wrap: anywhere; line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.oh-card-body.is-open { display: block; }
+.oh-card-actions { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--cds-gap-xs) var(--cds-gap-md); margin-top: auto; padding-top: var(--cds-gap-xs); font-size: var(--cds-font-size-caption); }
+.oh-card-actions a, .oh-preview a { color: var(--color-fg); text-underline-offset: 3px; }
+.oh-preview { display: flex; flex-direction: column; gap: var(--cds-gap-sm); padding: var(--cds-pad-lg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); }
+.oh-preview-body { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--cds-gap-lg); min-height: 3em; }
+.oh-preview-img { display: block; width: 100%; max-width: 320px; height: auto; border-radius: var(--cds-radius); border: 1px solid var(--color-border-line); }
+.oh-preview-side { display: flex; flex-direction: column; gap: var(--cds-gap-xs); flex: 1 1 200px; min-width: 0; }
+.oh-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--cds-gap-xs) var(--cds-gap-sm); }
+.oh-drill-head { display: flex; flex-direction: column; gap: var(--cds-gap-xs); }
+.oh-drill-title { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); line-height: 1.15; overflow-wrap: anywhere; }
+.oh [data-dash-source-state="refreshing"] { opacity: .5; }
+@media (prefers-reduced-motion: no-preference) { .oh [data-dash-source-state] { transition: opacity var(--cds-dur-slow) var(--cds-ease-out); } }
+@media (max-width: 560px) { .oh-refresh { margin-left: 0; } .oh-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .oh-tile { padding: var(--cds-pad-md); } }
+</style>
+
+<div class="oh" id="oh">
+  <header class="oh-head" id="top">
+    <h1 class="oh-title">Openhouse Meta Ads</h1>
+    <p class="oh-lede" id="summary"><span data-draw="period">—</span>, <span data-draw="who">—</span> spent <b data-draw="kpi" data-k="spend">—</b> across <b data-draw="kpi" data-k="campaigns">—</b> Meta campaigns. <span data-purpose="hiring">Hiring brought in <b data-draw="kpi" data-k="hiring_leads">—</b> leads for <b data-draw="kpi" data-k="hiring_spend">—</b>.</span> <span data-purpose="enquiries">Admissions, afterschool and camps brought in <b data-draw="kpi" data-k="enquiry_leads">—</b> enquiries for <b data-draw="kpi" data-k="enquiry_spend">—</b>.</span> <span data-purpose="sales">Ticket sales brought in <b data-draw="kpi" data-k="ticket_purchases">—</b> purchases worth <b data-draw="kpi" data-k="ticket_sales">—</b> including GST, from <b data-draw="kpi" data-k="sales_spend">—</b> of ads.</span></p>
+  </header>
+
+  <div class="oh-controls" id="controls">
+    <label class="oh-field oh-field--camp" for="oh-camp">Campaign
+      <select class="dash-select" id="oh-camp" data-draw="camp-select" data-source="named_campaigns"></select>
+    </label>
+    <label class="oh-field" for="oh-acct">Ad account
+      <select class="dash-select" id="oh-acct" data-draw="acct-select"></select>
+    </label>
+    <label class="oh-field" for="oh-range">Period
+      <select class="dash-select" id="oh-range">
+        <option value="campaign" id="oh-range-campaign" hidden>Whole campaign</option>
+        <option value="today">Today</option>
+        <option value="yesterday">Yesterday</option>
+        <option value="last_7d">Last 7 days</option>
+        <option value="last_14d">Last 14 days</option>
+        <option value="last_30d">Last 30 days</option>
+        <option value="this_month">This month</option>
+        <option value="last_month">Last month</option>
+        <option value="all_time">All time</option>
+      </select>
+    </label>
+    <div class="oh-refresh" id="refresh">
+      <span class="oh-note" data-draw="refresh-status">—</span>
+      <button class="oh-btn" id="oh-refresh" type="button">Refresh now</button>
+    </div>
+  </div>
+  <p class="oh-note oh-camp-note" id="camp-note" data-draw="camp-note" hidden></p>
+  <p class="oh-note" id="not-included">Not included: Openhouse 3. Meta doesn’t share its data while the account status is unsettled.</p>
+
+  <div class="oh-view" id="overview">
+    <div class="oh-tiles" id="kpis">
+      <div class="oh-tile" id="kpi-spend">
+        <span class="oh-tile-label">Amount spent</span>
+        <span class="oh-tile-value" data-draw="kpi" data-k="spend">—</span>
+        <span class="oh-tile-sub"><span data-draw="kpi" data-k="campaigns">—</span> Meta campaigns</span>
+      </div>
+      <div class="oh-tile" id="kpi-hiring" data-purpose="hiring">
+        <span class="oh-tile-label"><i class="oh-dot oh-dot--hiring"></i>Hiring leads</span>
+        <span class="oh-tile-value" data-draw="kpi" data-k="hiring_leads">—</span>
+        <span class="oh-tile-sub"><span data-draw="kpi" data-k="cost_per_hiring_lead">—</span> per lead · hiring campaigns</span>
+      </div>
+      <div class="oh-tile" id="kpi-enquiries" data-purpose="enquiries">
+        <span class="oh-tile-label"><i class="oh-dot oh-dot--enquiries"></i>Enquiry leads</span>
+        <span class="oh-tile-value" data-draw="kpi" data-k="enquiry_leads">—</span>
+        <span class="oh-tile-sub"><span data-draw="kpi" data-k="cost_per_enquiry">—</span> per lead · admissions, afterschool &amp; camps</span>
+      </div>
+      <div class="oh-tile" id="kpi-tickets" data-purpose="sales">
+        <span class="oh-tile-label"><i class="oh-dot oh-dot--sales"></i>Ticket purchases</span>
+        <span class="oh-tile-value" data-draw="kpi" data-k="ticket_purchases">—</span>
+        <span class="oh-tile-sub"><span data-draw="kpi" data-k="cost_per_ticket_purchase">—</span> per purchase · ticket campaigns</span>
+      </div>
+      <div class="oh-tile" id="kpi-roas" data-purpose="sales">
+        <span class="oh-tile-label"><i class="oh-dot oh-dot--sales"></i>Ticket sales ROAS</span>
+        <span class="oh-tile-value" data-draw="kpi" data-k="ticket_roas">—</span>
+        <span class="oh-tile-sub"><span data-draw="kpi" data-k="ticket_sales">—</span> in ticket sales incl. GST</span>
+      </div>
+      <div class="oh-tile" id="kpi-impressions">
+        <span class="oh-tile-label">Impressions</span>
+        <span class="oh-tile-value" data-draw="kpi" data-k="impressions">—</span>
+        <span class="oh-tile-sub"><span data-draw="kpi" data-k="cpm">—</span> per 1,000 impressions</span>
+      </div>
+      <div class="oh-tile" id="kpi-clicks">
+        <span class="oh-tile-label">Link clicks</span>
+        <span class="oh-tile-value" data-draw="kpi" data-k="link_clicks">—</span>
+        <span class="oh-tile-sub"><span data-draw="kpi" data-k="link_ctr">—</span> link CTR · <span data-draw="kpi" data-k="cpc">—</span> per click</span>
+      </div>
+    </div>
+    <p class="oh-note" id="price-needed" data-draw="price-note" data-source="ticket_sales"></p>
+
+    <section class="oh-section" id="trend">
+      <div class="oh-section-head">
+        <h2 class="oh-h2">Amount spent per <span data-draw="trend-unit">—</span></h2>
+        <span class="oh-note">Point at a bar to see its leads, purchases and link clicks.</span>
+      </div>
+      <div class="oh-chart" id="trend-chart" data-draw="trend" data-source="daily"></div>
+      <div class="oh-chart" id="gtrend-chart" data-draw="trend" data-source="group_daily" hidden></div>
+      <p class="oh-note" id="gtrend-wait" hidden>Getting this campaign’s spend by day from Meta…</p>
+    </section>
+
+    <section class="oh-section" id="campaigns">
+      <div class="oh-section-head">
+        <h2 class="oh-h2">Meta campaigns</h2>
+        <span class="oh-note">Meta campaigns that spent in this period or are running now, each with the campaign it belongs to and what that campaign is for. Ticket sales = purchases × the campaign’s ticket price + 18% GST. Select one to see its ad sets and ads.</span>
+      </div>
+      <div class="oh-tablewrap" id="campaign-wrap">
+        <table class="oh-table is-pickable" id="campaign-table" aria-label="Meta campaigns" data-source="campaigns" data-row-key="id">
+          <thead><tr>
+            <th data-field="name" aria-sort="none"><button class="oh-sort" type="button" data-sort="name">Meta campaign</button></th>
+            <th class="oh-purpose" data-field="type_label" aria-sort="none"><button class="oh-sort" type="button" data-sort="type_label">Purpose</button></th>
+            <th data-field="effective_status">Status</th>
+            <th data-field="amount_spent" aria-sort="none"><button class="oh-sort" type="button" data-sort="amount_spent">Spend</button></th>
+            <th data-field="lead" aria-sort="none"><button class="oh-sort" type="button" data-sort="lead">Leads</button></th>
+            <th data-field="cost_per_lead" aria-sort="none"><button class="oh-sort" type="button" data-sort="cost_per_lead">Cost / lead</button></th>
+            <th data-field="omni_purchase" aria-sort="none"><button class="oh-sort" type="button" data-sort="omni_purchase">Purchases</button></th>
+            <th data-field="cost_per_omni_purchase" aria-sort="none"><button class="oh-sort" type="button" data-sort="cost_per_omni_purchase">Cost / purchase</button></th>
+            <th data-source="ticket_sales" data-field="ticket_sales" aria-sort="none"><button class="oh-sort" type="button" data-sort="ticket_sales">Ticket sales</button></th>
+            <th data-source="ticket_sales" data-field="ticket_roas" aria-sort="none"><button class="oh-sort" type="button" data-sort="ticket_roas">ROAS</button></th>
+            <th data-field="impressions" aria-sort="none"><button class="oh-sort" type="button" data-sort="impressions">Impressions</button></th>
+            <th data-field="website_ctr" aria-sort="none"><button class="oh-sort" type="button" data-sort="website_ctr">Link CTR</button></th>
+            <th data-field="cost_per_link_click" aria-sort="none"><button class="oh-sort" type="button" data-sort="cost_per_link_click">Cost / link click</button></th>
+            <th data-field="cpm" aria-sort="none"><button class="oh-sort" type="button" data-sort="cpm">CPM</button></th>
+            <th data-field="frequency" aria-sort="none"><button class="oh-sort" type="button" data-sort="frequency">Frequency</button></th>
+          </tr></thead>
+          <tbody data-draw="campaign-rows"></tbody>
+        </table>
+      </div>
+      <p class="oh-note" data-draw="campaign-note"></p>
+    </section>
+  </div>
+
+  <div class="oh-view" id="drill" hidden>
+    <div class="oh-drill-head">
+      <nav class="oh-crumbs" aria-label="Breadcrumb">
+        <button class="oh-link" type="button" id="oh-back">← Back to the overview</button>
+      </nav>
+      <h2 class="oh-drill-title" data-draw="drill-title">—</h2>
+      <p class="oh-note" data-draw="drill-sub"></p>
+    </div>
+
+    <div class="oh-tiles" id="campaign-kpis">
+      <div class="oh-tile">
+        <span class="oh-tile-label">Amount spent</span>
+        <span class="oh-tile-value" data-draw="ckpi" data-k="amount_spent">—</span>
+        <span class="oh-tile-sub"><span data-draw="ckpi" data-k="impressions">—</span> impressions</span>
+      </div>
+      <div class="oh-tile" data-purpose="leads">
+        <span class="oh-tile-label">Leads</span>
+        <span class="oh-tile-value" data-draw="ckpi" data-k="lead">—</span>
+        <span class="oh-tile-sub"><span data-draw="ckpi" data-k="cost_per_lead">—</span> per lead</span>
+      </div>
+      <div class="oh-tile" data-purpose="sales">
+        <span class="oh-tile-label">Purchases</span>
+        <span class="oh-tile-value" data-draw="ckpi" data-k="omni_purchase">—</span>
+        <span class="oh-tile-sub"><span data-draw="ckpi" data-k="cost_per_omni_purchase">—</span> per purchase</span>
+      </div>
+      <div class="oh-tile" data-purpose="sales">
+        <span class="oh-tile-label">Ticket sales ROAS</span>
+        <span class="oh-tile-value" data-draw="ckpi" data-k="ticket_roas" data-from="ticket_sales">—</span>
+        <span class="oh-tile-sub"><span data-draw="ckpi" data-k="ticket_sales" data-from="ticket_sales">—</span> in ticket sales · <span data-draw="ckpi" data-k="ticket_price" data-from="ticket_sales">—</span> per ticket incl. GST</span>
+      </div>
+      <div class="oh-tile">
+        <span class="oh-tile-label">Link CTR</span>
+        <span class="oh-tile-value" data-draw="ckpi" data-k="website_ctr">—</span>
+        <span class="oh-tile-sub"><span data-draw="ckpi" data-k="cost_per_link_click">—</span> per link click</span>
+      </div>
+      <div class="oh-tile">
+        <span class="oh-tile-label">Frequency</span>
+        <span class="oh-tile-value" data-draw="ckpi" data-k="frequency">—</span>
+        <span class="oh-tile-sub"><span data-draw="ckpi" data-k="reach">—</span> accounts reached</span>
+      </div>
+    </div>
+    <p class="oh-note" data-draw="ckpi-note"></p>
+
+    <section class="oh-section" id="adsets">
+      <div class="oh-section-head">
+        <h2 class="oh-h2">Ad sets</h2>
+        <span class="oh-note">Select an ad set to show only its ads below.</span>
+      </div>
+      <div class="oh-tablewrap" id="adset-wrap">
+        <table class="oh-table is-pickable" id="adset-table" aria-label="Ad sets" data-source="adsets" data-row-key="id">
+          <thead><tr>
+            <th data-field="name">Ad set</th>
+            <th data-field="effective_status">Status</th>
+            <th data-field="amount_spent">Spend</th>
+            <th data-field="lead">Leads</th>
+            <th data-field="cost_per_lead">Cost / lead</th>
+            <th data-field="omni_purchase">Purchases</th>
+            <th data-field="cost_per_omni_purchase">Cost / purchase</th>
+            <th data-source="adset_tickets" data-field="ticket_sales">Ticket sales</th>
+            <th data-source="adset_tickets" data-field="ticket_roas">ROAS</th>
+            <th data-field="impressions">Impressions</th>
+            <th data-field="website_ctr">Link CTR</th>
+            <th data-field="cost_per_link_click">Cost / link click</th>
+            <th data-field="cpm">CPM</th>
+            <th data-field="frequency">Frequency</th>
+          </tr></thead>
+          <tbody data-draw="adset-rows"></tbody>
+        </table>
+      </div>
+      <p class="oh-note" data-draw="adset-note"></p>
+    </section>
+
+    <section class="oh-section" id="ads">
+      <div class="oh-section-head">
+        <h2 class="oh-h2">Ads and creatives</h2>
+        <button class="oh-link" type="button" id="oh-all-ads" hidden>Show ads from every ad set</button>
+      </div>
+      <p class="oh-note" data-draw="ads-scope"></p>
+      <div class="oh-preview" id="ad-preview-panel" hidden>
+        <div class="oh-preview-body" data-draw="ad-preview" data-source="ad_preview">—</div>
+        <div><button class="oh-link" type="button" id="oh-preview-close">Close preview</button></div>
+      </div>
+      <div class="oh-gallery" id="creative-gallery" data-draw="creative-cards" data-source="ads creatives" hidden></div>
+      <p class="oh-note" data-draw="creative-note"></p>
+      <div class="oh-tablewrap" id="ad-wrap">
+        <table class="oh-table" id="ad-table" aria-label="Ads" data-source="ads" data-row-key="id">
+          <thead><tr>
+            <th data-field="name">Ad</th>
+            <th data-field="effective_status">Status</th>
+            <th data-field="amount_spent">Spend</th>
+            <th data-field="lead">Leads</th>
+            <th data-field="cost_per_lead">Cost / lead</th>
+            <th data-field="omni_purchase">Purchases</th>
+            <th data-field="cost_per_omni_purchase">Cost / purchase</th>
+            <th data-source="ad_tickets" data-field="ticket_sales">Ticket sales</th>
+            <th data-source="ad_tickets" data-field="ticket_roas">ROAS</th>
+            <th data-field="impressions">Impressions</th>
+            <th data-field="website_ctr">Link CTR</th>
+            <th data-field="cost_per_link_click">Cost / link click</th>
+            <th data-field="cpm">CPM</th>
+            <th data-field="frequency">Frequency</th>
+          </tr></thead>
+          <tbody data-draw="ad-rows"></tbody>
+        </table>
+      </div>
+      <p class="oh-note" data-draw="ad-note"></p>
+    </section>
+  </div>
+</div>
+
+<script>
+// ---- Sources: Meta's answers become rows ----
+
+const CAMPAIGN_SOURCES = ['camp_oh2', 'camp_temp', 'camp_backup', 'camp_oh4'];
+const DAILY_SOURCES = ['daily_oh2', 'daily_temp', 'daily_backup', 'daily_oh4'];
+const CATALOG_SOURCES = ['catalog_oh2', 'catalog_temp', 'catalog_backup', 'catalog_oh4'];
+const GROUP_DAILY_SOURCES = ['gdaily_oh2', 'gdaily_temp', 'gdaily_backup', 'gdaily_oh4'];
+const DRILL_SOURCES = ['adsets', 'ads'];
+
+const metaRows = ({ answer, args }) => {
+  if (answer && answer.error) {
+    throw new Error(typeof answer.error === 'string' ? answer.error : (answer.error.message || 'Meta returned an error.'));
+  }
+  const raw = answer && answer.ad_entities;
+  if (raw == null) throw new Error('Meta sent no rows for this request.');
+  const list = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (!Array.isArray(list)) throw new Error('Meta sent rows in a shape this dashboard does not read.');
+  const textFields = ['id', 'name', 'account_id', 'campaign_id', 'adset_id', 'adset_name', 'campaign_name', 'creative_id', 'effective_status', 'objective', 'optimization_goal', 'date_start', 'date_stop', 'start_time'];
+  const columns = [];
+  const rows = list.map((entity) => {
+    const row = {};
+    for (const [key, value] of Object.entries(entity)) {
+      if (!columns.includes(key)) columns.push(key);
+      if (value == null) row[key] = null;
+      else if (textFields.includes(key)) row[key] = String(value);
+      else if (typeof value === 'object' && !('value' in value)) row[key] = JSON.stringify(value);
+      else {
+        const n = Number(typeof value === 'object' ? value.value : value);
+        row[key] = Number.isFinite(n) ? n : null;
+      }
+    }
+    if (row.account_id == null && args && args.ad_account_id) {
+      row.account_id = String(args.ad_account_id);
+      if (!columns.includes('account_id')) columns.push('account_id');
+    }
+    return row;
+  });
+  // Rows with spend come sorted by spend, so there a cut only matters when the last row still spent; a list without spend is cut by any next page.
+  const last = rows[rows.length - 1];
+  const morePages = Boolean(answer.pagination && answer.pagination.next_cursor);
+  const lastCounts = !last || !('amount_spent' in last) ? !columns.includes('amount_spent') : (last.amount_spent || 0) > 0;
+  return { data: rows, columns, cut: morePages && Boolean(last) && lastCounts };
+};
+
+for (const id of [...CAMPAIGN_SOURCES, ...DAILY_SOURCES, ...CATALOG_SOURCES, ...GROUP_DAILY_SOURCES, ...DRILL_SOURCES]) {
+  dash.loader(id, { description: 'Reads the rows out of Meta’s answer. Amounts become numbers in INR; IDs and names stay text; targeting stays as JSON text.', fn: metaRows });
+}
+
+dash.loader('creatives', {
+  description: 'Reads each creative’s format, headline, primary text, button and carousel cards out of Meta’s answer.',
+  fn: ({ answer }) => {
+    if (answer && answer.error) {
+      throw new Error(typeof answer.error === 'string' ? answer.error : (answer.error.message || 'Meta returned an error.'));
+    }
+    const list = (answer && answer.ad_creatives) || [];
+    return list.map((c) => {
+      const cards = Array.isArray(c.child_attachments) ? c.child_attachments : [];
+      return {
+        id: String(c.id),
+        object_type: c.object_type || null,
+        has_video: Boolean(c.video_id),
+        title: c.title || null,
+        body: c.body || null,
+        call_to_action_type: c.call_to_action_type || null,
+        story_id: c.effective_object_story_id || null,
+        card_count: cards.length,
+        card_names: cards.map((k) => k.name).filter(Boolean).join(' | ') || null,
+      };
+    });
+  },
+});
+
+dash.loader('ad_preview', {
+  description: 'Takes the preview picture (when Meta sends one) and the link to Meta’s own preview out of the answer.',
+  fn: ({ answer, args }) => {
+    const items = Array.isArray(answer) ? answer : [answer];
+    let image = null;
+    let info = null;
+    for (const item of items) {
+      if (typeof item === 'string') {
+        if (!image && item.startsWith('data:image/')) image = item;
+        continue;
+      }
+      if (!item || typeof item !== 'object') continue;
+      if (item.error) throw new Error(typeof item.error === 'string' ? item.error : (item.error.message || 'Meta returned an error.'));
+      const mime = item.mimeType || item.mime_type || '';
+      if (!image && typeof item.data === 'string' && /^image\//.test(mime)) image = 'data:' + mime + ';base64,' + item.data;
+      if (!info && (item.preview_url || item.preview_html)) info = item;
+    }
+    return [{
+      ad_id: String(args.ad_id),
+      image,
+      preview_url: info && info.preview_url ? String(info.preview_url).replace(/&amp;/g, '&') : null,
+      placement: info ? (info.ad_format_label || null) : null,
+    }];
+  },
+});
+
+// ---- Named campaigns: the Meta campaigns of one push, such as Halloween 2026 or Afterschool November 2026 ----
+
+const OH_ACCOUNTS = ['428357117849129', '605518854162850', '324083576441691', '1643698160129047'];
+// Names as they appear in the Openhouse business portfolio.
+const PORTFOLIO_NAMES = {
+  '428357117849129': 'Openhouse 2',
+  '605518854162850': 'Openhouse Temp',
+  '324083576441691': 'Openhouse Backup',
+  '1643698160129047': 'Openhouse - 4',
+};
+const HIRING_ACCOUNT = '605518854162850';
+const SALES_ACCOUNT = '428357117849129';
+// What each kind of campaign is for. `purpose` decides which headline figures its Meta campaigns count towards.
+const CAMPAIGN_TYPES = {
+  event: { label: 'Playdates & events', purpose: 'Ticket sales', forText: 'for selling tickets', all: 'All playdates & events', who: 'Playdates and events' },
+  afterschool: { label: 'Afterschool', purpose: 'Enquiries', forText: 'for afterschool enquiries, trial classes and workshops', all: 'All afterschool campaigns', who: 'Afterschool campaigns' },
+  preschool: { label: 'Preschool admissions', purpose: 'Enquiries', forText: 'for preschool admission enquiries', all: 'All preschool admissions campaigns', who: 'Preschool admissions campaigns' },
+  toddler: { label: 'Toddler club', purpose: 'Enquiries', forText: 'for toddler club enquiries', all: 'All toddler club campaigns', who: 'Toddler club campaigns' },
+  summer: { label: 'Summer camp', purpose: 'Enquiries', forText: 'for summer camp enquiries and bookings', all: 'All summer camp campaigns', who: 'Summer camp campaigns' },
+  hiring: { label: 'Hiring', purpose: 'Hiring', forText: 'for job applicants', all: 'All hiring campaigns', who: 'Hiring campaigns' },
+  training: { label: 'Teacher training', purpose: 'Enquiries', forText: 'for teacher training course enquiries', all: 'All teacher training campaigns', who: 'Teacher training campaigns' },
+  brand: { label: 'Brand & boosted posts', purpose: null, forText: 'for awareness', all: 'All brand campaigns & boosted posts', who: 'Brand campaigns and boosted posts' },
+  other: { label: 'Other', purpose: null, forText: 'with no set purpose', all: 'All other campaigns', who: 'Other campaigns' },
+};
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+// Festivals and events keep one name per year, whichever ad account ran them.
+const CAMPAIGN_EVENTS = [
+  [/halloween|(^|_)hlw\d\d/, 'Halloween'], [/christmas|xmas/, 'Christmas'], [/diwali/, 'Diwali'], [/navratri|dussehra|dasara/, 'Navratri'],
+  [/(^|_)onam(_|$)/, 'Onam'], [/independence/, 'Independence Day'], [/mothers?_?day/, 'Mother’s Day'], [/fathers?_?day/, 'Father’s Day'],
+  [/harvest|sankranti|pongal/, 'Harvest Festival'], [/(^|_)holi(_|$)/, 'Holi'], [/ganesh/, 'Ganesh Chaturthi'],
+  [/grandparent/, 'Grandparents’ Day'], [/children_?s?_?day/, 'Children’s Day'], [/(^|_)fest\d\d(_|$)/, 'Openhouse Fest'],
+];
+// Words in Meta names that say where, how or which copy, not what a playdate was about.
+const NOT_A_THEME = new Set(['framer', 'leadgen', 'leads', 'lead', 'whatsapp', 'sales', 'branding', 'instagram', 'playdate', 'playdates', 'toddler', 'club',
+  'cr', 'new', 'old', 'copy', 'temp', 'a', 'south', 'north', 'ln', 'otp', 'custom', 'audience', 'experiment', 'general', 'oh', 'bangalore', 'blr', 'kol',
+  'kolkata', 'cal', 'tr', 'sl', 'salt', 'lake', 'hsr', 'har', 'harlur', 'ind', 'indiranagar', 'sada', 'saha', 'sarja', 'sarjapur', 'jp', 'jaya',
+  'jayanagar', 'wf', 'whitefield', 'hrbr', 'theatre', 'ecc', 'bally']);
+const MONTH_WORDS = /^(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)$/;
+const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+// Names a Meta campaign after the campaign it belongs to, from its Meta name, start month and ad account.
+// A row in the Campaign names list wins over these rules.
+const nameCampaign = (c, teamNames) => {
+  const team = teamNames[c.id];
+  const n = String(c.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const ym = String(c.start_time || '').slice(0, 7);
+  const year = /^\d{4}-\d{2}$/.test(ym) ? ym.slice(0, 4) : '';
+  const month = year ? MONTH_NAMES[Number(ym.slice(5, 7)) - 1] + ' ' + year : '';
+  const auto = (() => {
+    const by = (type, words) => ({ type, campaign: words.trim() });
+    if (/^instagram_post/.test(n)) return by('brand', 'Boosted posts ' + month);
+    if (/training_program|teacher_training/.test(n)) return by('training', 'Teacher training ' + month);
+    // Openhouse Temp runs hiring; in Sep–Oct 2025 it also ran copies of sales campaigns, marked Temp, 1mile or Autoflow.
+    const salesCopy = /(^|_)temp(_|$)|autoflow|1mile/.test(n) || (/toddler|playdate|(^|_)ptp(_|$)|(^|_)eca(_|$)/.test(n) && !/hiring/.test(n));
+    if (c.account_id === HIRING_ACCOUNT ? !salesCopy : /hiring|recruit/.test(n)) return by('hiring', 'Hiring ' + month);
+    for (const [pattern, event] of CAMPAIGN_EVENTS) if (pattern.test(n)) return by('event', event + ' ' + year);
+    if (/summer|(^|_)camps?(_|$)/.test(n)) return by('summer', 'Summer camp ' + year);
+    if (/playdate/.test(n)) {
+      const theme = String(c.name).split(/[^A-Za-z0-9]+/).map((w) => w.toLowerCase())
+        .filter((w) => w && !/^\d+(st|nd|rd|th)?$/.test(w) && !MONTH_WORDS.test(w) && !/^\d+(\.\d+)?km$/.test(w) && !/^ages?\d/.test(w) && !NOT_A_THEME.has(w))
+        .map((w, i) => (i > 0 && ['and', 'the', 'in', 'of', 'it', 'on', 'to', 'at'].includes(w) ? w : w[0].toUpperCase() + w.slice(1)))
+        .join(' ');
+      return by('event', theme ? theme + ' playdate ' + year : 'Playdates ' + month);
+    }
+    if (/toddler|(^|_)ptp(_|$)/.test(n)) return by('toddler', 'Toddler club ' + month);
+    if (/(^|_)(eca|as\d\d|activity_club|robotics|music|musical|public_speaking|karate|workshop|puppets|ec_club|academics|chess)(_|$)|after_?school/.test(n)) return by('afterschool', 'Afterschool ' + month);
+    if (/preschool|daycare|early_years|admission|readiness/.test(n)) return by('preschool', 'Preschool admissions ' + month);
+    if (/brand|awareness/.test(n)) return by('brand', 'Brand awareness ' + month);
+    return by('other', 'Other campaigns ' + month);
+  })();
+  const named = team ? { campaign: team.campaign, type: team.type || auto.type, by: 'Campaign names list' } : { ...auto, by: 'Naming rules' };
+  return { ...named, key: named.type + ':' + slug(named.campaign) };
+};
+// The Campaign names list, by Meta campaign ID. Its type may be written as a label (Afterschool) or a code (afterschool).
+const teamNamesFrom = (rows) => {
+  const typeOf = {};
+  for (const [code, t] of Object.entries(CAMPAIGN_TYPES)) { typeOf[code] = code; typeOf[t.label.toLowerCase()] = code; }
+  const names = {};
+  for (const r of rows) {
+    const id = String(r.meta_campaign_id ?? '').trim();
+    const campaign = String(r.campaign ?? '').trim();
+    if (/^\d+$/.test(id) && campaign) names[id] = { campaign, type: typeOf[String(r.type ?? '').trim().toLowerCase()] || null };
+  }
+  return names;
+};
+
+dash.calc('programs', {
+  inputs: ['catalog_oh2', 'catalog_temp', 'catalog_backup', 'catalog_oh4', 'campaign_names'],
+  title: 'Meta campaigns by named campaign',
+  description: 'Every Meta campaign in the four Openhouse accounts that started since 1 June 2025, with the campaign it belongs to. A row in the Campaign names list wins; otherwise the naming rules read the Meta name, start month and account. Festivals and events become “Halloween 2026”, themed playdates “Messy Dino playdate 2026”, summer camps “Summer camp 2026”, and the rest their kind and start month, such as “Afterschool November 2026”, “Preschool admissions May 2026” or “Hiring October 2026”. Openhouse Temp campaigns count as hiring unless they are the Sep–Oct 2025 copies of sales campaigns.',
+  fn: (openhouse2, openhouseTemp, openhouseBackup, openhouse4, campaignNames) => {
+    const teamNames = teamNamesFrom(campaignNames);
+    return [...openhouse2, ...openhouseTemp, ...openhouseBackup, ...openhouse4].map((c) => {
+      const named = nameCampaign(c, teamNames);
+      return {
+        id: c.id,
+        account_id: c.account_id,
+        meta_name: c.name,
+        start_date: String(c.start_time || '').slice(0, 10) || null,
+        campaign: named.campaign,
+        type: named.type,
+        type_label: CAMPAIGN_TYPES[named.type].label,
+        key: named.key,
+        named_by: named.by,
+      };
+    });
+  },
+});
+
+dash.calc('named_campaigns', {
+  inputs: ['programs'],
+  title: 'Campaign list',
+  description: 'One row for each named campaign, such as Halloween 2026, and one for each kind of campaign, such as All afterschool campaigns: how many Meta campaigns it holds, in which accounts, when the first and the last of them started, and their Meta campaign IDs. The Campaign filter lists these.',
+  fn: (programs) => {
+    const groups = {};
+    const add = (key, level, campaign, who, r) => {
+      const g = groups[key] || (groups[key] = { key, level, campaign, who, type: r.type, type_label: r.type_label, first_start: null, last_start: null, meta_campaigns: 0, account_ids: [], ids: [] });
+      g.meta_campaigns += 1;
+      g.ids.push(r.id);
+      if (!g.account_ids.includes(r.account_id)) g.account_ids.push(r.account_id);
+      if (r.start_date && (!g.first_start || r.start_date < g.first_start)) g.first_start = r.start_date;
+      if (r.start_date && (!g.last_start || r.start_date > g.last_start)) g.last_start = r.start_date;
+    };
+    for (const r of programs) {
+      add(r.key, 'campaign', r.campaign, r.campaign, r);
+      add('type:' + r.type, 'type', CAMPAIGN_TYPES[r.type].all, CAMPAIGN_TYPES[r.type].who, r);
+    }
+    const listed = (names) => (names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names.join(''));
+    return Object.values(groups)
+      .map((g) => ({ ...g, ids: g.ids.sort(), accounts: listed(g.account_ids.map((id) => PORTFOLIO_NAMES[id] || 'Account ' + id)) }))
+      .sort((a, b) => (a.level !== b.level ? (a.level === 'type' ? -1 : 1) : a.first_start === b.first_start ? a.campaign.localeCompare(b.campaign) : a.first_start < b.first_start ? 1 : -1));
+  },
+});
+
+dash.calc('campaigns', {
+  inputs: ['camp_oh2', 'camp_temp', 'camp_backup', 'camp_oh4', 'campaign_names', 'ticket_prices'],
+  title: 'Meta campaigns across Openhouse accounts',
+  description: 'Meta campaigns from the four Openhouse ad accounts that spent, got leads or purchases in the period, or are running, each with the named campaign it belongs to (from the Campaign names list, or else the naming rules) and its purpose: Hiring; Ticket sales for playdates, events and any campaign with a ticket price; Enquiries for preschool admissions, afterschool, toddler club, summer camp and teacher training. Link CTR = link clicks ÷ impressions; cost per link click, lead and purchase = spend ÷ that count; CPM = spend per 1,000 impressions; frequency = impressions ÷ reach.',
+  fn: (openhouse2, openhouseTemp, openhouseBackup, openhouse4, campaignNames, ticketPrices) => {
+    const teamNames = teamNamesFrom(campaignNames);
+    const priced = new Set(ticketPrices.filter((p) => String(p.price_before_gst ?? '').replace(/[^0-9.]/g, '') !== '').map((p) => String(p.campaign_id).trim()));
+    const rate = (part, whole, scale = 1) => (part != null && whole > 0 ? Math.round(((part * scale) / whole) * 100) / 100 : null);
+    return [...openhouse2, ...openhouseTemp, ...openhouseBackup, ...openhouse4]
+      .filter((c) => (c.amount_spent || 0) > 0 || (c.lead || 0) > 0 || (c.omni_purchase || 0) > 0 || c.effective_status === 'ACTIVE')
+      .map((c) => {
+        const named = nameCampaign(c, teamNames);
+        const type = CAMPAIGN_TYPES[named.type];
+        const purpose = named.type === 'hiring' ? 'Hiring' : named.type === 'event' || priced.has(c.id) ? 'Ticket sales' : type.purpose;
+        const spend = c.amount_spent || 0;
+        return {
+          ...c,
+          website_ctr: rate(c.link_click, c.impressions, 100),
+          cost_per_link_click: rate(spend, c.link_click),
+          cpm: rate(spend, c.impressions, 1000),
+          cost_per_lead: rate(spend, c.lead),
+          cost_per_omni_purchase: rate(spend, c.omni_purchase),
+          frequency: rate(c.impressions, c.reach),
+          campaign: named.campaign, campaign_key: named.key, type: named.type, type_label: type.label, purpose,
+        };
+      });
+  },
+});
+
+// Ticket sales = purchases × the campaign's ticket price × 1.18 (18% GST); one purchase = one ticket.
+dash.calc('ticket_sales', {
+  inputs: ['campaigns', 'ticket_prices'],
+  title: 'Ticket sales by campaign',
+  description: 'Purchases × the campaign’s ticket price from the Ticket prices list × 1.18 for 18% GST. One purchase counts as one ticket. ROAS is ticket sales ÷ amount spent. A playdate or event campaign with purchases but no price is flagged as needing one.',
+  fn: (campaigns, ticketPrices) => {
+    const gst = 0.18;
+    const round = (v) => Math.round(v * 100) / 100;
+    const priceBeforeGst = {};
+    for (const p of ticketPrices) {
+      const text = String(p.price_before_gst ?? '').replace(/[^0-9.]/g, '');
+      if (p.campaign_id && text !== '') priceBeforeGst[String(p.campaign_id).trim()] = Number(text);
+    }
+    return campaigns.map((c) => {
+      const before = priceBeforeGst[c.id];
+      const purchases = c.omni_purchase || 0;
+      const ticketPrice = before == null ? null : round(before * (1 + gst));
+      const sales = ticketPrice == null ? null : round(purchases * ticketPrice);
+      return {
+        id: c.id,
+        ticket_price: ticketPrice,
+        ticket_sales: sales,
+        ticket_roas: sales != null && (c.amount_spent || 0) > 0 ? round(sales / c.amount_spent) : null,
+        price_needed: before == null && purchases > 0 && c.purpose === 'Ticket sales',
+      };
+    });
+  },
+});
+
+dash.calc('adset_tickets', {
+  inputs: ['adsets', 'ticket_prices'],
+  title: 'Ticket sales by ad set',
+  description: 'Each ad set’s purchases × its campaign’s ticket price × 1.18 for 18% GST. ROAS is ticket sales ÷ amount spent.',
+  fn: (adsets, ticketPrices) => {
+    const gst = 0.18;
+    const round = (v) => Math.round(v * 100) / 100;
+    const priceBeforeGst = {};
+    for (const p of ticketPrices) {
+      const text = String(p.price_before_gst ?? '').replace(/[^0-9.]/g, '');
+      if (p.campaign_id && text !== '') priceBeforeGst[String(p.campaign_id).trim()] = Number(text);
+    }
+    return adsets.map((a) => {
+      const before = priceBeforeGst[a.campaign_id];
+      const sales = before == null ? null : round((a.omni_purchase || 0) * round(before * (1 + gst)));
+      return { id: a.id, ticket_sales: sales, ticket_roas: sales != null && (a.amount_spent || 0) > 0 ? round(sales / a.amount_spent) : null };
+    });
+  },
+});
+
+dash.calc('ad_tickets', {
+  inputs: ['ads', 'ticket_prices'],
+  title: 'Ticket sales by ad',
+  description: 'Each ad’s purchases × its campaign’s ticket price × 1.18 for 18% GST. ROAS is ticket sales ÷ amount spent.',
+  fn: (ads, ticketPrices) => {
+    const gst = 0.18;
+    const round = (v) => Math.round(v * 100) / 100;
+    const priceBeforeGst = {};
+    for (const p of ticketPrices) {
+      const text = String(p.price_before_gst ?? '').replace(/[^0-9.]/g, '');
+      if (p.campaign_id && text !== '') priceBeforeGst[String(p.campaign_id).trim()] = Number(text);
+    }
+    return ads.map((a) => {
+      const before = priceBeforeGst[a.campaign_id];
+      const sales = before == null ? null : round((a.omni_purchase || 0) * round(before * (1 + gst)));
+      return { id: a.id, ticket_sales: sales, ticket_roas: sales != null && (a.amount_spent || 0) > 0 ? round(sales / a.amount_spent) : null };
+    });
+  },
+});
+
+dash.calc('kpis', {
+  inputs: ['campaigns', 'ticket_sales'],
+  title: 'Totals by account',
+  description: 'Spend, results and rates added up from the Meta campaigns shown (one named campaign’s when the Campaign filter is set), for each account and for all Openhouse accounts together. Hiring figures use the hiring campaigns. Enquiry figures use preschool admissions, afterschool, toddler club, summer camp and teacher training campaigns. Ticket-sales figures use playdate and event campaigns and any campaign with a ticket price, boosts and video campaigns included; campaigns with purchases but no ticket price are left out of ticket sales and ROAS.',
+  fn: (campaigns, ticketSalesByCampaign) => {
+    const tickets = {};
+    for (const t of ticketSalesByCampaign) tickets[t.id] = t;
+    const round = (v) => (v == null ? null : Math.round(v * 100) / 100);
+    const total = (rows, key) => rows.reduce((s, r) => s + (r[key] || 0), 0);
+    const ratio = (a, b) => (b > 0 ? a / b : null);
+    const groups = { all: campaigns };
+    for (const c of campaigns) (groups[c.account_id] = groups[c.account_id] || []).push(c);
+    return Object.entries(groups).map(([account, rows]) => {
+      const hiring = rows.filter((r) => r.purpose === 'Hiring');
+      const enquiries = rows.filter((r) => r.purpose === 'Enquiries');
+      const ticketSales = rows.filter((r) => r.purpose === 'Ticket sales');
+      const spend = total(rows, 'amount_spent');
+      const impressions = total(rows, 'impressions');
+      const linkClicks = total(rows, 'link_click');
+      const hiringSpend = total(hiring, 'amount_spent');
+      const hiringLeads = total(hiring, 'lead');
+      const enquirySpend = total(enquiries, 'amount_spent');
+      const enquiryLeads = total(enquiries, 'lead');
+      const salesSpend = total(ticketSales, 'amount_spent');
+      const ticketPurchases = total(ticketSales, 'omni_purchase');
+      const priced = ticketSales.filter((r) => !(tickets[r.id] && tickets[r.id].price_needed));
+      const ticketValue = priced.reduce((s, r) => s + ((tickets[r.id] && tickets[r.id].ticket_sales) || 0), 0);
+      const pricedSpend = total(priced, 'amount_spent');
+      return {
+        account,
+        campaigns: rows.length,
+        spend: round(spend),
+        impressions,
+        link_clicks: linkClicks,
+        link_ctr: round(ratio(linkClicks * 100, impressions)),
+        cpc: round(ratio(spend, linkClicks)),
+        cpm: round(ratio(spend * 1000, impressions)),
+        hiring_spend: round(hiringSpend),
+        hiring_leads: hiringLeads,
+        cost_per_hiring_lead: round(ratio(hiringSpend, hiringLeads)),
+        enquiry_spend: round(enquirySpend),
+        enquiry_leads: enquiryLeads,
+        cost_per_enquiry: round(ratio(enquirySpend, enquiryLeads)),
+        hiring_campaigns: hiring.length,
+        enquiry_campaigns: enquiries.length,
+        sales_campaigns: ticketSales.length,
+        sales_spend: round(salesSpend),
+        ticket_purchases: ticketPurchases,
+        cost_per_ticket_purchase: round(ratio(salesSpend, ticketPurchases)),
+        ticket_sales: round(ticketValue),
+        ticket_roas: round(ratio(ticketValue, pricedSpend)),
+        campaigns_needing_price: ticketSales.length - priced.length,
+      };
+    });
+  },
+});
+
+dash.calc('daily', {
+  inputs: ['daily_oh2', 'daily_temp', 'daily_backup', 'daily_oh4'],
+  title: 'Daily totals by account',
+  description: 'Spend, impressions, link clicks, leads and purchases for each day, per Openhouse account and for all of them together.',
+  fn: (openhouse2, openhouseTemp, openhouseBackup, openhouse4) => {
+    const days = {};
+    const add = (account, r) => {
+      const key = account + '|' + r.date_start;
+      const d = days[key] || (days[key] = { key, account, date: r.date_start, spend: 0, impressions: 0, link_clicks: 0, leads: 0, purchases: 0 });
+      d.spend = Math.round((d.spend + (r.amount_spent || 0)) * 100) / 100;
+      d.impressions += r.impressions || 0;
+      d.link_clicks += r.link_click || 0;
+      d.leads += r.lead || 0;
+      d.purchases += r.omni_purchase || 0;
+    };
+    for (const r of [...openhouse2, ...openhouseTemp, ...openhouseBackup, ...openhouse4]) {
+      add(r.account_id, r);
+      add('all', r);
+    }
+    return Object.values(days).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  },
+});
+
+dash.calc('group_daily', {
+  inputs: GROUP_DAILY_SOURCES,
+  title: 'The picked campaign by day',
+  description: 'Spend, impressions, link clicks, leads and purchases of the picked campaign’s Meta campaigns that spent in the period, added up for each day (each week or month on long periods), per Openhouse account and for all of them together.',
+  fn: (openhouse2, openhouseTemp, openhouseBackup, openhouse4) => {
+    const days = {};
+    const add = (account, r) => {
+      const key = account + '|' + r.date_start;
+      const d = days[key] || (days[key] = { key, account, date: r.date_start, spend: 0, impressions: 0, link_clicks: 0, leads: 0, purchases: 0 });
+      d.spend = Math.round((d.spend + (r.amount_spent || 0)) * 100) / 100;
+      d.impressions += r.impressions || 0;
+      d.link_clicks += r.link_click || 0;
+      d.leads += r.lead || 0;
+      d.purchases += r.omni_purchase || 0;
+    };
+    for (const r of [...openhouse2, ...openhouseTemp, ...openhouseBackup, ...openhouse4]) {
+      if (!r.date_start) continue;
+      add(r.account_id, r);
+      add('all', r);
+    }
+    return Object.values(days).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  },
+});
+
+dash.calc('audiences', {
+  inputs: ['adsets'],
+  title: 'Who each ad set reaches',
+  description: 'A one-line summary of each ad set’s targeting: who, where, interests or custom audiences, exclusions and placement limits.',
+  fn: (adsets) => {
+    const more = (names, keep) => (names.length > keep ? names.slice(0, keep).join(', ') + ' +' + (names.length - keep) + ' more' : names.join(', '));
+    const sentenceCase = (words) => words.map((w, i) => (i === 0 || /^[A-Z]{2,3}$/.test(w) ? w : w.toLowerCase())).join(' ');
+    // Audience names follow BRAND_CODE_Words_180d; keep the words, read 180d as (180 days).
+    const audienceName = (raw) => {
+      const tokens = String(raw || '').split(/[_\s]+/).filter(Boolean);
+      while (tokens.length > 1 && /^[A-Z0-9]{2,8}$/.test(tokens[0]) && !['IG', 'FB', 'WA'].includes(tokens[0])) tokens.shift();
+      const kept = tokens.filter((t) => !/^(\d+pct|IN|EXCLUDE|LAL)$/i.test(t));
+      const days = kept.length && /^\d+d$/.test(kept[kept.length - 1]) ? kept.pop().slice(0, -1) : null;
+      return sentenceCase(kept) + (days ? ' (' + days + ' days)' : '');
+    };
+    // Meta sometimes sends lists as {"0": …, "1": …}; turn those back into lists.
+    const listify = (x) => {
+      if (Array.isArray(x)) return x.map(listify);
+      if (!x || typeof x !== 'object') return x;
+      const keys = Object.keys(x);
+      if (keys.length && keys.every((k, i) => k === String(i))) return keys.map((k) => listify(x[k]));
+      const out = {};
+      for (const k of keys) out[k] = listify(x[k]);
+      return out;
+    };
+    const describe = (json) => {
+      let t;
+      try { t = listify(JSON.parse(json)); } catch (e) { return null; }
+      if (!t || typeof t !== 'object') return null;
+      const parts = [];
+
+      const who = Array.isArray(t.genders) && t.genders.length === 1 ? (t.genders[0] === 1 ? 'Men' : 'Women') : 'Ages';
+      const ages = Array.isArray(t.age_range) && t.age_range.length === 2 ? t.age_range : [t.age_min, t.age_max];
+      const ageText = ages[0] != null ? ages[0] + '–' + (ages[1] >= 65 ? '65+' : ages[1]) : '';
+      parts.push(who === 'Ages' ? (ageText ? 'Ages ' + ageText : 'Everyone') : who + (ageText ? ' ' + ageText : ''));
+
+      const geo = t.geo_locations || {};
+      const radii = [...new Set([...(geo.custom_locations || []), ...(geo.places || [])].map((l) => l.radius + ' ' + (l.distance_unit === 'mile' ? 'mi' : 'km')))];
+      if (geo.places && geo.places.length) parts.push('within ' + radii.join('/') + ' of ' + more(geo.places.map((p) => p.name), 2));
+      else if (geo.custom_locations && geo.custom_locations.length) parts.push('within ' + radii.join('/') + ' of ' + geo.custom_locations.length + (geo.custom_locations.length === 1 ? ' location' : ' locations'));
+      const named = [...(geo.cities || []), ...(geo.regions || [])].map((g) => g.name).filter(Boolean);
+      if (named.length) parts.push(more(named, 3));
+      else if (!parts[1] && geo.countries && geo.countries.length) parts.push(geo.countries.map((c) => (c === 'IN' ? 'India' : c)).join(', '));
+
+      const lookalikes = (t.custom_audiences || []).filter((a) => a.subtype === 'LOOKALIKE' || a.lookalike_spec);
+      const customs = (t.custom_audiences || []).filter((a) => !lookalikes.includes(a));
+      for (const a of lookalikes) {
+        const ratio = a.lookalike_spec && a.lookalike_spec.ratio ? Math.round(a.lookalike_spec.ratio * 1000) / 10 + '%' : '';
+        parts.push('Lookalike' + (ratio ? ' (' + ratio + ')' : '') + ' of ' + audienceName(a.name).replace(/^./, (c) => c.toLowerCase()));
+      }
+      if (customs.length) parts.push('Custom audiences: ' + more(customs.map((a) => audienceName(a.name)), 2));
+
+      // Within one group Meta matches people who fit any of the criteria.
+      const labels = { interests: 'Interests', behaviors: 'Behaviours', work_positions: 'Job', work_employers: 'Employer', industries: 'Industry', family_statuses: 'Life stage', life_events: 'Life events', education_statuses: 'Education', user_adclusters: 'Income' };
+      for (const group of t.flexible_spec || []) {
+        const bits = [];
+        for (const [key, label] of Object.entries(labels)) {
+          const names = (group[key] || [])
+            .map((x) => String(x.name || '').replace(/\s*\(India\)/, '').replace(/^Household income:\s*/i, '').replace(/\s*\((?:[a-z][a-z ,&]+)\)\s*$/, '').trim())
+            .filter(Boolean);
+          if (names.length) bits.push(label + ': ' + more(names, key === 'family_statuses' ? 1 : 3));
+        }
+        if (bits.length) parts.push((bits.length > 1 ? 'Any of — ' : '') + bits.join('; '));
+      }
+
+      const excluded = (t.excluded_custom_audiences || []).map((a) => audienceName(a.name));
+      if (excluded.length) parts.push('excludes ' + more(excluded, 2));
+
+      const positions = [...(t.facebook_positions || []), ...(t.instagram_positions || [])];
+      if (positions.length && positions.every((p) => ['story', 'reels', 'facebook_reels'].includes(p))) parts.push('Stories & Reels only');
+      if (t.targeting_automation && t.targeting_automation.advantage_audience === 1) parts.push('Advantage+ audience');
+      return parts.join(' · ');
+    };
+    return adsets.map((a) => ({ id: a.id, audience: describe(a.targeting) }));
+  },
+});
+
+// ---- Page ----
+
+// What each account is for, as the team describes it.
+const ACCOUNT_PURPOSES = { [HIRING_ACCOUNT]: 'Hiring', [SALES_ACCOUNT]: 'Sales' };
+const purposeColor = (purpose) => (purpose === 'Hiring' ? dash.colors[1] : purpose === 'Ticket sales' ? dash.colors[0] : purpose === 'Enquiries' ? dash.colors[2] : null);
+const REFRESH_EVERY_MS = 2 * 60 * 60 * 1000;
+
+const PERIODS = {
+  campaign: 'Over the whole campaign', today: 'Today', yesterday: 'Yesterday', last_7d: 'In the last 7 days', last_14d: 'In the last 14 days',
+  last_30d: 'In the last 30 days', this_month: 'This month', last_month: 'Last month', all_time: 'Over all time',
+};
+
+// The Campaign filter: one named campaign (such as "event:halloween-2026") or one kind of campaign ("type:afterschool").
+const namedCampaign = (key) => {
+  if (!key) return undefined;
+  const d = dash.data('named_campaigns');
+  return d.status === 'ok' ? (d.data || []).find((r) => r.key === key) : undefined;
+};
+const isOneCampaign = (p) => Boolean(p.prog) && !String(p.prog).startsWith('type:');
+
+// Every period runs up to and including today, counted in India time (the ad accounts' time zone).
+const todayInIndia = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const shiftDays = (iso, n) => {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const periodDates = (range) => {
+  const today = todayInIndia();
+  const monthStart = today.slice(0, 8) + '01';
+  switch (range) {
+    // From the day the picked campaign's first Meta campaign started, up to today.
+    case 'campaign': {
+      const p = dash.params();
+      const g = namedCampaign(p.prog);
+      const since = g && g.first_start ? g.first_start : /^\d{4}-\d{2}-\d{2}$/.test(p.since || '') ? p.since : shiftDays(today, -29);
+      return { since: since > today ? today : since, until: today };
+    }
+    case 'today': return { since: today, until: today };
+    case 'yesterday': return { since: shiftDays(today, -1), until: shiftDays(today, -1) };
+    case 'last_14d': return { since: shiftDays(today, -13), until: today };
+    case 'last_30d': return { since: shiftDays(today, -29), until: today };
+    case 'this_month': return { since: monthStart, until: today };
+    case 'last_month': {
+      const end = shiftDays(monthStart, -1);
+      return { since: end.slice(0, 8) + '01', until: end };
+    }
+    // Meta keeps 37 months of results, so "all time" starts on the 1st of the month three years back.
+    case 'all_time': return { since: (Number(today.slice(0, 4)) - 3) + today.slice(4, 8) + '01', until: today };
+    default: return { since: shiftDays(today, -6), until: today };
+  }
+};
+// All time fetches every campaign that spent and charts by month; a picked campaign lets all its Meta campaigns through.
+const queryShape = (range, prog) => ({
+  climit: range === 'all_time' || prog ? 2000 : 50,
+  xf: range === 'all_time' ? 'amount_spent' : 'campaign.id',
+  xop: range === 'all_time' ? 'GREATER_THAN' : 'NOT_IN',
+  dstep: range === 'all_time' ? 'monthly' : '1',
+});
+const syncPeriod = () => {
+  const p = dash.params();
+  if (p.range === 'campaign' && !isOneCampaign(p)) { dash.setParams({ range: 'last_7d', ...periodDates('last_7d'), ...queryShape('last_7d', p.prog) }); return; }
+  const want = { ...periodDates(p.range), ...queryShape(p.range, p.prog) };
+  if (Object.keys(want).some((k) => p[k] !== want[k])) dash.setParams(want);
+};
+syncPeriod();
+const OBJECTIVES = {
+  OUTCOME_SALES: 'Sales', CONVERSIONS: 'Conversions', PRODUCT_CATALOG_SALES: 'Catalogue sales',
+  OUTCOME_LEADS: 'Leads', LEAD_GENERATION: 'Leads', LINK_CLICKS: 'Traffic', OUTCOME_TRAFFIC: 'Traffic',
+  OUTCOME_ENGAGEMENT: 'Engagement', POST_ENGAGEMENT: 'Engagement', OUTCOME_AWARENESS: 'Awareness',
+  BRAND_AWARENESS: 'Awareness', REACH: 'Reach', VIDEO_VIEWS: 'Video views', MESSAGES: 'Messages',
+  OUTCOME_APP_PROMOTION: 'App promotion',
+};
+const GOALS = {
+  OFFSITE_CONVERSIONS: 'Conversions', LEAD_GENERATION: 'Leads', QUALITY_LEAD: 'Conversion leads',
+  LINK_CLICKS: 'Link clicks', LANDING_PAGE_VIEWS: 'Landing page views', THRUPLAY: 'ThruPlay', REACH: 'Reach',
+  IMPRESSIONS: 'Impressions', POST_ENGAGEMENT: 'Post engagement', VISIT_INSTAGRAM_PROFILE: 'Instagram profile visits',
+  CONVERSATIONS: 'Conversations', VALUE: 'Conversion value', AD_RECALL_LIFT: 'Ad recall lift',
+};
+const STATUSES = {
+  ACTIVE: ['Active', 'ok'], PAUSED: ['Paused', ''], CAMPAIGN_PAUSED: ['Campaign off', ''], ADSET_PAUSED: ['Ad set off', ''],
+  AD_PAUSED: ['Ad off', ''], ARCHIVED: ['Archived', ''], DELETED: ['Deleted', ''], IN_PROCESS: ['Scheduled', ''],
+  PREAPPROVED: ['Pre-approved', ''], PENDING_REVIEW: ['In review', 'warn'], WITH_ISSUES: ['Has issues', 'bad'],
+  DISAPPROVED: ['Rejected', 'bad'], PENDING_BILLING_INFO: ['Needs billing', 'bad'],
+};
+const words = (s) => (s ? String(s).toLowerCase().replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : '');
+
+const inr0 = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+const inr2 = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const whole = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
+const compact = new Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 1 });
+const FORMATS = {
+  money: (v) => (v == null ? '—' : Math.abs(v) < 100 ? inr2.format(v) : inr0.format(v)),
+  count: (v) => (v == null ? '—' : whole.format(v)),
+  pct: (v) => (v == null ? '—' : v.toFixed(2) + '%'),
+  roas: (v) => (v == null ? '—' : v.toFixed(2) + '×'),
+  freq: (v) => (v == null ? '—' : v.toFixed(2)),
+};
+const KPI_FORMAT = {
+  spend: 'money', campaigns: 'count', impressions: 'count', cpm: 'money', link_clicks: 'count', link_ctr: 'pct', cpc: 'money',
+  hiring_spend: 'money', hiring_leads: 'count', cost_per_hiring_lead: 'money',
+  enquiry_spend: 'money', enquiry_leads: 'count', cost_per_enquiry: 'money',
+  sales_spend: 'money', ticket_purchases: 'count', cost_per_ticket_purchase: 'money', ticket_sales: 'money', ticket_roas: 'roas',
+};
+const KPI_ZERO_WHEN_EMPTY = ['spend', 'campaigns', 'hiring_spend', 'hiring_leads', 'enquiry_spend', 'enquiry_leads', 'sales_spend', 'ticket_purchases'];
+const FIELD_FORMAT = {
+  amount_spent: 'money', lead: 'count', cost_per_lead: 'money', omni_purchase: 'count', cost_per_omni_purchase: 'money',
+  ticket_sales: 'money', ticket_roas: 'roas', ticket_price: 'money', impressions: 'count', reach: 'count', website_ctr: 'pct',
+  cost_per_link_click: 'money', cpm: 'money', frequency: 'freq', link_click: 'count',
+};
+const METRIC_COLUMNS = ['amount_spent', 'lead', 'cost_per_lead', 'omni_purchase', 'cost_per_omni_purchase', 'ticket_sales', 'ticket_roas', 'impressions', 'website_ctr', 'cost_per_link_click', 'cpm', 'frequency'];
+
+// Adds the ticket-sales figures from a ticket calc to each row, by id.
+const withTickets = (rows, source) => {
+  const d = dash.data(source);
+  const byId = {};
+  if (d.status === 'ok') for (const t of d.data || []) byId[t.id] = t;
+  return rows.map((r) => ({ ...r, ticket_sales: byId[r.id] ? byId[r.id].ticket_sales : null, ticket_roas: byId[r.id] ? byId[r.id].ticket_roas : null }));
+};
+
+const isDrilling = (p) => p.view === 'campaign' && Boolean(p.campaign);
+
+const sortRows = (rows, spec) => {
+  const [key, dir] = String(spec || 'amount_spent:desc').split(':');
+  const sign = dir === 'asc' ? 1 : -1;
+  return rows.slice().sort((a, b) => {
+    const x = a[key];
+    const y = b[key];
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return (typeof x === 'string' ? x.localeCompare(y) : x - y) * sign;
+  });
+};
+
+const markedValue = (source, field, where, text) => {
+  const span = document.createElement('span');
+  span.dataset.source = source;
+  span.dataset.field = field;
+  span.dataset.where = where;
+  span.textContent = text;
+  return span;
+};
+
+// The kind of campaign, with a dot coloured by what it counts towards: tickets, enquiries or hiring.
+const purposeCell = (r) => {
+  const td = document.createElement('td');
+  td.className = 'oh-purpose';
+  if (!r.type_label) {
+    td.classList.add('oh-dim');
+    td.textContent = '—';
+    return td;
+  }
+  const tag = document.createElement('span');
+  tag.className = 'oh-tag';
+  const dot = document.createElement('i');
+  const color = purposeColor(r.purpose);
+  if (color) dot.style.background = color;
+  tag.append(dot, document.createTextNode(r.type_label));
+  td.append(tag);
+  return td;
+};
+
+const buildRow = (r, subText, onPick, selected, showPurpose, extra) => {
+  const tr = document.createElement('tr');
+  tr.dataset.key = r.id;
+  if (selected) tr.classList.add('is-selected');
+  const first = document.createElement('td');
+  const name = document.createElement('span');
+  name.className = 'oh-name';
+  name.textContent = r.name || r.id;
+  first.append(name);
+  if (extra) first.append(extra);
+  if (subText) {
+    const sub = document.createElement('span');
+    sub.className = 'oh-sub';
+    sub.textContent = subText;
+    first.append(sub);
+  }
+  const statusCell = document.createElement('td');
+  const [label, tone] = STATUSES[r.effective_status] || [words(r.effective_status) || '—', ''];
+  const pill = document.createElement('span');
+  pill.className = 'oh-pill' + (tone ? ' oh-pill--' + tone : '');
+  pill.textContent = label;
+  statusCell.append(pill);
+  const metricCells = METRIC_COLUMNS.map((k) => {
+    const td = document.createElement('td');
+    if (r[k] == null) td.className = 'oh-dim';
+    td.textContent = FORMATS[FIELD_FORMAT[k]](r[k]);
+    return td;
+  });
+  tr.append(first, ...(showPurpose ? [purposeCell(r)] : []), statusCell, ...metricCells);
+  if (onPick) {
+    tr.tabIndex = 0;
+    if (selected) tr.setAttribute('aria-selected', 'true');
+    tr.addEventListener('click', () => onPick(r));
+    tr.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(r); }
+    });
+  }
+  return tr;
+};
+
+const accountName = (id) => PORTFOLIO_NAMES[id] || 'Account ' + id;
+
+// With a campaign picked, the chart reads that campaign's own daily rows instead of the accounts' totals.
+const trendSources = (p) => (p.prog ? (groupDailyReady(p) ? GROUP_DAILY_SOURCES : []) : DAILY_SOURCES);
+
+const refreshAll = () => {
+  syncPeriod();
+  const p = dash.params();
+  for (const id of [...CATALOG_SOURCES, ...CAMPAIGN_SOURCES, ...trendSources(p)]) dash.refresh(id);
+  if (isDrilling(p)) {
+    for (const id of DRILL_SOURCES) dash.refresh(id);
+    if (creativesReady(p)) dash.refresh('creatives');
+    if (p.pv === '1' && p.ad) dash.refresh('ad_preview');
+  }
+};
+
+// The creatives query asks for the creative IDs of the ads in the open campaign.
+const wantedCreatives = (p) => {
+  const d = dash.data('ads');
+  if (d.status !== 'ok') return null;
+  const ids = (d.data || []).filter((r) => r.campaign_id === p.campaign && r.creative_id).map((r) => r.creative_id);
+  return [...new Set(ids)].sort().slice(0, 100);
+};
+const creativesReady = (p) => {
+  const wanted = wantedCreatives(p);
+  return Boolean(wanted && wanted.length && String(p.creatives) === String(wanted));
+};
+
+// The picked campaign's chart asks only for its Meta campaigns that spent in the period, by day,
+// or by week or month when that would be too many rows.
+const wantedGroupDaily = (p) => {
+  const d = dash.data('campaigns');
+  if (!p.prog || p.gop !== 'IN' || d.status !== 'ok' || d.refreshing) return null;
+  const inGroup = new Set((p.gids || []).map(String));
+  const rows = d.data || [];
+  if (rows.some((r) => !inGroup.has(r.id))) return null;
+  const ids = [...new Set(rows.filter((r) => (r.amount_spent || 0) > 0).map((r) => r.id))].sort().slice(0, 300);
+  const days = Math.round((new Date(p.until + 'T00:00:00Z') - new Date(p.since + 'T00:00:00Z')) / 86400000) + 1;
+  const n = Math.max(1, ids.length);
+  const step = n * days <= 1500 ? '1' : n * Math.ceil(days / 7) <= 1500 ? '7' : 'monthly';
+  return { ids: ids.length ? ids : ['0'], step };
+};
+const groupDailyReady = (p) => {
+  const want = wantedGroupDaily(p);
+  return Boolean(want) && String(p.gdids) === String(want.ids) && p.gstep === want.step;
+};
+
+const pickCampaign = (key) => {
+  const p = dash.params();
+  if (!key) {
+    const range = p.range === 'campaign' ? 'last_7d' : p.range;
+    dash.setParams({ prog: '', pname: '', gop: 'NOT_IN', gids: ['0'], view: '', range, ...periodDates(range), ...queryShape(range, '') });
+    return;
+  }
+  const g = namedCampaign(key);
+  if (!g) return;
+  // One campaign opens on its whole run; a kind of campaign keeps the period already chosen.
+  const period = g.level === 'campaign'
+    ? { range: 'campaign', since: g.first_start && g.first_start <= todayInIndia() ? g.first_start : todayInIndia(), until: todayInIndia() }
+    : p.range === 'campaign' ? { range: 'last_30d', ...periodDates('last_30d') } : {};
+  dash.setParams({ prog: key, pname: g.who, gop: 'IN', gids: g.ids.length ? g.ids : ['0'], view: '', ...period, ...queryShape(period.range || p.range, key) });
+};
+
+const openCampaign = (r) => {
+  dash.setParams({ view: 'campaign', account: r.account_id, campaign: r.id, cname: r.name || r.id, adset: '', aname: '' });
+  requestAnimationFrame(() => document.getElementById('top')?.scrollIntoView({ block: 'start' }));
+};
+
+const pickAdset = (r) => {
+  const p = dash.params();
+  dash.setParams(p.adset === r.id ? { adset: '', aname: '' } : { adset: r.id, aname: r.name || r.id });
+};
+
+// ---- Header ----
+
+dash.draw('period', (el) => {
+  const p = dash.params();
+  const day = d3.utcFormat('%-d %b');
+  const asDate = (s) => new Date(s + 'T00:00:00Z');
+  let dates = '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(p.since || '') && /^\d{4}-\d{2}-\d{2}$/.test(p.until || '')) {
+    if (p.since === p.until) dates = day(asDate(p.since));
+    else if (p.since.slice(0, 7) === p.until.slice(0, 7)) dates = asDate(p.since).getUTCDate() + '–' + day(asDate(p.until));
+    else if (p.since.slice(0, 4) !== p.until.slice(0, 4)) dates = d3.utcFormat('%-d %b %Y')(asDate(p.since)) + ' – ' + d3.utcFormat('%-d %b %Y')(asDate(p.until));
+    else dates = day(asDate(p.since)) + ' – ' + day(asDate(p.until));
+  }
+  el.textContent = (PERIODS[p.range] || 'In this period') + (dates ? ' (' + dates + ')' : '');
+});
+
+dash.draw('who', (el) => {
+  const p = dash.params();
+  const g = namedCampaign(p.prog);
+  const picked = p.prog ? (g ? g.who : p.pname || 'the picked campaign') : '';
+  const where = p.acct ? accountName(p.acct) : '';
+  el.textContent = picked ? picked + (where ? ' in ' + where : '') : where || 'Openhouse';
+});
+
+dash.draw('camp-select', (sel) => {
+  const p = dash.params();
+  const d = dash.data('named_campaigns');
+  const rows = d.status === 'ok' ? d.data || [] : [];
+  const options = [new Option('All campaigns', '')];
+  if (!rows.some((r) => r.key === p.prog) && p.prog) options.push(new Option(p.pname || 'Picked campaign', p.prog));
+  for (const [code, t] of Object.entries(CAMPAIGN_TYPES)) {
+    // With an ad account chosen, list only the campaigns that ran in it.
+    const own = rows.filter((r) => r.type === code && (r.key === p.prog || !p.acct || r.account_ids.includes(p.acct)));
+    const named = own.filter((r) => r.level === 'campaign');
+    if (!named.length) continue;
+    const group = document.createElement('optgroup');
+    group.label = t.label + ' · ' + t.forText;
+    const all = own.find((r) => r.level === 'type');
+    if (all) group.append(new Option(all.campaign, all.key));
+    for (const r of named) group.append(new Option(r.campaign, r.key));
+    options.push(group);
+  }
+  sel.replaceChildren(...options);
+  if (document.activeElement !== sel) sel.value = p.prog || '';
+  sel.onchange = () => pickCampaign(sel.value);
+});
+
+dash.draw('camp-note', (el) => {
+  const p = dash.params();
+  const g = namedCampaign(p.prog);
+  if (!g) { el.textContent = p.prog ? 'Getting the campaign list from Meta…' : ''; return; }
+  const t = CAMPAIGN_TYPES[g.type];
+  const started = g.first_start ? d3.utcFormat('%-d %b %Y')(new Date(g.first_start + 'T00:00:00Z')) : '';
+  const count = markedValue('named_campaigns', 'meta_campaigns', 'key=' + g.key, FORMATS.count(g.meta_campaigns));
+  const name = document.createElement('b');
+  name.textContent = g.campaign;
+  el.replaceChildren(
+    name,
+    document.createTextNode(' · ' + t.label + ', ' + t.forText + ' · '),
+    count,
+    document.createTextNode(' Meta campaign' + (g.meta_campaigns === 1 ? '' : 's') + ' in ' + g.accounts
+      + (started ? (g.level === 'campaign' ? ' · the first started on ' : ' · since ') + started : '') + '.'),
+  );
+});
+
+dash.draw('kpi', (el) => {
+  const key = el.dataset.k;
+  const d = dash.data('kpis');
+  el.classList.toggle('dash-skeleton', d.status === 'loading');
+  if (d.status !== 'ok') { el.textContent = '—'; return; }
+  const acct = dash.params().acct || 'all';
+  const row = (d.data || []).find((r) => r.account === acct);
+  if (!row) { el.textContent = KPI_ZERO_WHEN_EMPTY.includes(key) ? '0' : '—'; return; }
+  el.replaceChildren(markedValue('kpis', key, 'account=' + acct, FORMATS[KPI_FORMAT[key]](row[key])));
+});
+
+dash.draw('acct-select', (sel) => {
+  sel.replaceChildren(
+    new Option('All Openhouse accounts', ''),
+    ...OH_ACCOUNTS.map((id) => new Option(accountName(id) + (ACCOUNT_PURPOSES[id] ? ' · ' + ACCOUNT_PURPOSES[id] : ''), id)),
+  );
+  if (document.activeElement !== sel) sel.value = dash.params().acct || '';
+  sel.onchange = () => dash.setParams({ acct: sel.value, view: '' });
+});
+
+dash.draw('refresh-status', {
+  mount: () => ({ timer: setInterval(refreshAll, REFRESH_EVERY_MS) }),
+  update: (el) => {
+    const busy = [...CAMPAIGN_SOURCES, ...trendSources(dash.params())].some((id) => {
+      const s = dash.data(id);
+      return s.status === 'loading' || s.refreshing;
+    });
+    el.textContent = busy ? 'Getting the latest numbers from Meta…' : 'Refreshes on its own every 2 hours';
+    for (const btn of document.querySelectorAll('#oh-refresh')) btn.disabled = busy;
+  },
+  unmount: (el, made) => clearInterval(made.timer),
+});
+
+// ---- Overview ----
+
+// All time is charted per month; a picked campaign over a long period per week or per month.
+const trendStep = (el) => (el && el.dataset.source === 'group_daily' ? dash.params().gstep : dash.params().dstep) || '1';
+const STEP_WORDS = { '1': 'day', '7': 'week', monthly: 'month' };
+
+dash.draw('trend-unit', (el) => {
+  const p = dash.params();
+  el.textContent = STEP_WORDS[p.prog ? p.gstep : p.dstep] || 'day';
+});
+
+dash.draw('trend', {
+  mount: (el) => {
+    const svg = d3.select(el).append('svg').attr('role', 'img');
+    const tip = d3.select(el).append('div').attr('class', 'oh-tip').attr('hidden', '');
+    const msg = d3.select(el).append('p').attr('class', 'oh-note oh-chart-msg');
+    return { svg, tip, msg };
+  },
+  update: (el, { svg, tip, msg }) => {
+    const grouped = el.dataset.source === 'group_daily';
+    const d = dash.data(el.dataset.source);
+    const step = trendStep(el);
+    tip.attr('hidden', '');
+    el.classList.toggle('dash-skeleton', d.status === 'loading');
+    if (d.status !== 'ok') {
+      svg.selectAll('*').remove();
+      msg.text(d.status === 'error' ? 'Failed to load' : '');
+      return;
+    }
+    const acct = dash.params().acct || 'all';
+    let rows = (d.data || []).filter((r) => r.account === acct);
+    // A campaign's own rows include every day of the period; show only from its first to its last day of spend.
+    if (grouped) {
+      const spent = rows.map((r) => (r.spend || 0) > 0);
+      const first = spent.indexOf(true);
+      rows = first < 0 ? [] : rows.slice(first, spent.lastIndexOf(true) + 1);
+    }
+    svg.selectAll('*').remove();
+    const width = Math.max(260, el.clientWidth || 0);
+    const height = 220;
+    svg.attr('width', width).attr('height', height).attr('viewBox', `0 0 ${width} ${height}`);
+    if (!rows.length || rows.every((r) => !r.spend)) {
+      svg.attr('aria-label', 'No spend in this period');
+      msg.text('No spend in this period.');
+      return;
+    }
+    msg.text('');
+    const max = d3.max(rows, (r) => r.spend) || 1;
+    const unit = STEP_WORDS[step];
+    svg.attr('aria-label', `Bar chart of amount spent per ${unit} over ${rows.length} ${unit}s. Highest ${unit} ${FORMATS.money(max)}.`);
+    const y = d3.scaleLinear().domain([0, max]).nice(4);
+    const ticks = y.ticks(4);
+    const tickText = (v) => (v === 0 ? '₹0' : '₹' + compact.format(v));
+    const probe = svg.append('g');
+    const widest = d3.max(ticks, (t) => probe.append('text').text(tickText(t)).node().getComputedTextLength()) || 28;
+    probe.remove();
+    const m = { top: 12, right: 4, bottom: 28, left: Math.ceil(widest) + 10 };
+    y.range([height - m.bottom, m.top]);
+    const x = d3.scaleBand().domain(rows.map((r) => r.date)).range([m.left, width - m.right]).paddingInner(0.25).paddingOuter(0.1);
+
+    svg.append('g').attr('class', 'oh-grid').selectAll('line').data(ticks.filter((t) => t > 0)).join('line')
+      .attr('x1', m.left).attr('x2', width - m.right).attr('y1', (t) => y(t)).attr('y2', (t) => y(t));
+    svg.append('g').selectAll('text').data(ticks).join('text')
+      .attr('x', m.left - 8).attr('y', (t) => y(t)).attr('dy', '0.32em').attr('text-anchor', 'end').text(tickText);
+    const bars = svg.append('g').selectAll('rect').data(rows).join('rect')
+      .attr('class', 'oh-bar')
+      .attr('x', (r) => x(r.date)).attr('width', x.bandwidth())
+      .attr('y', (r) => y(r.spend)).attr('height', (r) => Math.max(0, y(0) - y(r.spend)))
+      .attr('rx', Math.min(3, x.bandwidth() / 4))
+      .style('fill', dash.colors[0]);
+    svg.append('line').attr('class', 'oh-base')
+      .attr('x1', m.left).attr('x2', width - m.right).attr('y1', y(0)).attr('y2', y(0));
+
+    const dayText = d3.utcFormat(step === 'monthly' ? '%b %Y' : '%-d %b');
+    const asDate = (s) => new Date(s + 'T00:00:00Z');
+    const every = Math.max(1, Math.ceil((step === 'monthly' ? 64 : 52) / x.step()));
+    svg.append('g').selectAll('text').data(rows.filter((r, i) => i % every === 0)).join('text')
+      .attr('x', (r) => x(r.date) + x.bandwidth() / 2).attr('y', height - 8).attr('text-anchor', 'middle')
+      .text((r) => dayText(asDate(r.date)));
+
+    const show = (r) => {
+      bars.classed('is-hover', (b) => b === r);
+      const node = tip.node();
+      node.replaceChildren();
+      const head = document.createElement('strong');
+      head.textContent = d3.utcFormat({ '7': 'Week of %-d %b', monthly: '%B %Y' }[step] || '%a %-d %b')(asDate(r.date)) + ' · ' + FORMATS.money(r.spend);
+      node.append(head);
+      for (const [label, value] of [['Leads', r.leads], ['Purchases', r.purchases], ['Link clicks', r.link_clicks], ['Impressions', r.impressions]]) {
+        const line = document.createElement('span');
+        line.textContent = label + ': ' + FORMATS.count(value);
+        node.append(line);
+      }
+      tip.attr('hidden', null);
+      const tw = node.offsetWidth;
+      const th = node.offsetHeight;
+      const cx = x(r.date) + x.bandwidth() / 2;
+      const left = Math.max(0, Math.min(width - tw, cx - tw / 2));
+      const top = Math.max(0, y(r.spend) - th - 8);
+      tip.style('transform', `translate(${left}px, ${top}px)`);
+    };
+    const hide = () => { bars.classed('is-hover', false); tip.attr('hidden', ''); };
+    svg.append('g').selectAll('rect').data(rows).join('rect')
+      .attr('x', (r) => x(r.date) - (x.step() - x.bandwidth()) / 2).attr('width', x.step())
+      .attr('y', m.top).attr('height', height - m.top - m.bottom)
+      .style('fill', 'transparent')
+      .on('pointerenter pointermove', (event, r) => show(r))
+      .on('pointerleave', hide);
+  },
+});
+
+dash.draw('campaign-rows', (tbody) => {
+  const d = dash.data('campaigns');
+  if (d.status !== 'ok') { tbody.replaceChildren(); return; }
+  const p = dash.params();
+  const rows = sortRows(withTickets((d.data || []).filter((r) => !p.acct || r.account_id === p.acct), 'ticket_sales'), p.csort);
+  tbody.replaceChildren(...rows.map((r) => buildRow(
+    r,
+    [r.campaign, accountName(r.account_id), r.objective ? (OBJECTIVES[r.objective] || words(r.objective)) + ' objective' : ''].filter(Boolean).join(' · '),
+    openCampaign,
+    false,
+    true,
+  )));
+});
+
+dash.draw('price-note', (el) => {
+  const t = dash.data('ticket_sales');
+  const c = dash.data('campaigns');
+  if (t.status !== 'ok' || c.status !== 'ok') { el.textContent = ''; return; }
+  const acct = dash.params().acct;
+  const needed = new Set((t.data || []).filter((r) => r.price_needed).map((r) => r.id));
+  const names = (c.data || []).filter((r) => needed.has(r.id) && (!acct || r.account_id === acct)).map((r) => r.name);
+  el.textContent = names.length
+    ? 'No ticket price set for ' + names.join(', ') + '. Its purchases are left out of ticket sales and ROAS until a price is added to the Ticket prices list in Sources.'
+    : '';
+});
+
+dash.draw('campaign-note', (el) => {
+  const d = dash.data('campaigns');
+  if (d.status === 'loading') { el.textContent = 'Loading campaigns from Meta…'; return; }
+  if (d.status === 'error') { el.textContent = 'Failed to load'; return; }
+  if (d.status !== 'ok') { el.textContent = ''; return; }
+  const p = dash.params();
+  const n = (d.data || []).filter((r) => !p.acct || r.account_id === p.acct).length;
+  el.textContent = n ? '' : p.prog ? 'None of this campaign’s Meta campaigns spent anything in this period.' : 'No Meta campaign spent anything in this period.';
+});
+
+// ---- Drill-down: one campaign ----
+
+dash.draw('drill-title', (el) => { el.textContent = dash.params().cname || '—'; });
+
+const selectedCampaign = () => {
+  const d = dash.data('campaigns');
+  const id = dash.params().campaign;
+  return d.status === 'ok' ? (d.data || []).find((r) => r.id === id) : undefined;
+};
+
+dash.draw('drill-sub', (el) => {
+  const c = selectedCampaign();
+  el.textContent = c
+    ? [
+      c.campaign,
+      c.type_label,
+      accountName(c.account_id),
+      c.objective ? (OBJECTIVES[c.objective] || words(c.objective)) + ' objective' : '',
+      (STATUSES[c.effective_status] || [words(c.effective_status)])[0],
+    ].filter(Boolean).join(' · ')
+    : '';
+});
+
+dash.draw('ckpi', (el) => {
+  const key = el.dataset.k;
+  const from = el.dataset.from || 'campaigns';
+  const c = selectedCampaign();
+  if (!c) { el.textContent = '—'; return; }
+  let row = c;
+  if (from !== 'campaigns') {
+    const d = dash.data(from);
+    row = d.status === 'ok' ? (d.data || []).find((r) => r.id === c.id) : undefined;
+    if (!row) { el.textContent = '—'; return; }
+  }
+  el.replaceChildren(markedValue(from, key, 'id=' + c.id, FORMATS[FIELD_FORMAT[key]](row[key])));
+});
+
+dash.draw('ckpi-note', (el) => {
+  const d = dash.data('campaigns');
+  el.textContent = d.status === 'ok' && !selectedCampaign() ? 'This campaign didn’t spend in the selected period.' : '';
+});
+
+dash.draw('adset-rows', (tbody) => {
+  const d = dash.data('adsets');
+  if (d.status !== 'ok') { tbody.replaceChildren(); return; }
+  const p = dash.params();
+  const rows = sortRows(withTickets((d.data || []).filter((r) => r.campaign_id === p.campaign), 'adset_tickets'), 'amount_spent:desc');
+  const aud = dash.data('audiences');
+  const audienceOf = {};
+  if (aud.status === 'ok') for (const a of aud.data || []) audienceOf[a.id] = a.audience;
+  tbody.replaceChildren(...rows.map((r) => {
+    let line = null;
+    if (audienceOf[r.id]) {
+      line = markedValue('audiences', 'audience', 'id=' + r.id, audienceOf[r.id]);
+      line.className = 'oh-aud';
+    }
+    const goal = GOALS[r.optimization_goal] ? 'Goal: ' + GOALS[r.optimization_goal] : words(r.optimization_goal);
+    return buildRow(r, goal, pickAdset, r.id === p.adset, false, line);
+  }));
+});
+
+dash.draw('adset-note', (el) => {
+  const d = dash.data('adsets');
+  const p = dash.params();
+  if (d.status === 'loading' || d.refreshing) { el.textContent = 'Loading ad sets from Meta…'; return; }
+  if (d.status === 'error') { el.textContent = 'Failed to load'; return; }
+  if (d.status !== 'ok') { el.textContent = ''; return; }
+  el.textContent = (d.data || []).some((r) => r.campaign_id === p.campaign) ? '' : 'No ad sets in this campaign.';
+});
+
+dash.draw('ads-scope', (el) => {
+  const p = dash.params();
+  el.textContent = p.adset ? 'Showing the ads in ' + (p.aname || 'the selected ad set') + '.' : 'Showing ads from every ad set in this campaign.';
+});
+
+const CTAS = {
+  BOOK_NOW: 'Book now', BOOK_TRAVEL: 'Book now', LEARN_MORE: 'Learn more', SIGN_UP: 'Sign up', APPLY_NOW: 'Apply now',
+  SHOP_NOW: 'Shop now', CONTACT_US: 'Contact us', MESSAGE_PAGE: 'Send message', WHATSAPP_MESSAGE: 'Send WhatsApp message',
+  GET_QUOTE: 'Get quote', SUBSCRIBE: 'Subscribe', GET_OFFER: 'Get offer', REGISTER_NOW: 'Register now', CALL_NOW: 'Call now',
+  INSTAGRAM_MESSAGE: 'Send Instagram message', NO_BUTTON: 'No button',
+};
+const creativeFormat = (c) => {
+  if (!c) return 'Creative';
+  if (c.card_count > 1) return 'Carousel · ' + c.card_count + ' cards';
+  if (c.has_video || c.object_type === 'VIDEO') return 'Video';
+  if (c.object_type === 'SHARE' || c.object_type === 'PHOTO') return 'Image';
+  return words(c.object_type) || 'Creative';
+};
+const make = (tag, className, text) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+};
+const outLink = (href, text) => {
+  const a = make('a', '', text);
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  return a;
+};
+const openPreview = (ad) => {
+  dash.setParams({ ad: ad.id, pv: '1' });
+  requestAnimationFrame(() => document.getElementById('ad-preview-panel')?.scrollIntoView({ block: 'nearest' }));
+};
+
+const creativeCard = (ad, c) => {
+  const card = make('article', 'oh-card');
+  card.id = 'creative-' + ad.id;
+  const top = make('div', 'oh-card-top');
+  top.append(make('span', 'oh-card-format', creativeFormat(c)));
+  const [label, tone] = STATUSES[ad.effective_status] || [words(ad.effective_status) || '—', ''];
+  top.append(make('span', 'oh-pill' + (tone ? ' oh-pill--' + tone : ''), label));
+  card.append(top, make('h3', 'oh-card-name', ad.name || ad.id));
+
+  const stats = make('p', 'oh-card-stats');
+  stats.append(markedValue('ads', 'amount_spent', 'id=' + ad.id, FORMATS.money(ad.amount_spent)), document.createTextNode(' spent'));
+  const result = (ad.omni_purchase || 0) > 0 ? ['omni_purchase', ' purchases']
+    : (ad.lead || 0) > 0 ? ['lead', ' leads']
+      : (ad.link_click || 0) > 0 ? ['link_click', ' link clicks'] : null;
+  if (result) stats.append(document.createTextNode(' · '), markedValue('ads', result[0], 'id=' + ad.id, FORMATS.count(ad[result[0]])), document.createTextNode(result[1]));
+  card.append(stats);
+
+  if (c) {
+    if (c.title) {
+      const headline = markedValue('creatives', 'title', 'id=' + c.id, c.title);
+      headline.className = 'oh-card-headline';
+      card.append(headline);
+    }
+    if (c.body) {
+      const body = markedValue('creatives', 'body', 'id=' + c.id, c.body);
+      body.className = 'oh-card-body';
+      const toggle = make('button', 'oh-link', 'Show full text');
+      toggle.type = 'button';
+      toggle.addEventListener('click', () => {
+        const open = body.classList.toggle('is-open');
+        toggle.textContent = open ? 'Show less' : 'Show full text';
+      });
+      card.append(body, toggle);
+    }
+    const meta = [c.call_to_action_type ? 'Button: ' + (CTAS[c.call_to_action_type] || words(c.call_to_action_type)) : '', c.card_names ? 'Cards: ' + c.card_names.split(' | ').join(' · ') : ''].filter(Boolean);
+    if (meta.length) card.append(make('p', 'oh-card-meta', meta.join(' — ')));
+  } else {
+    card.append(make('p', 'oh-card-meta', 'Creative details aren’t available for this ad.'));
+  }
+
+  const actions = make('div', 'oh-card-actions');
+  const preview = make('button', 'oh-link', 'Preview');
+  preview.type = 'button';
+  preview.addEventListener('click', () => openPreview(ad));
+  actions.append(preview);
+  if (c && /^\d+_\d+$/.test(c.story_id || '')) actions.append(outLink('https://www.facebook.com/' + c.story_id, 'View post'));
+  if (/^\d+$/.test(ad.account_id || '') && /^\d+$/.test(ad.id || '')) {
+    actions.append(outLink('https://adsmanager.facebook.com/adsmanager/manage/ads?act=' + ad.account_id + '&selected_ad_ids=' + ad.id, 'Open in Ads Manager'));
+  }
+  card.append(actions);
+  return card;
+};
+
+dash.draw('creative-cards', (el) => {
+  const p = dash.params();
+  const ads = dash.data('ads');
+  const creatives = dash.data('creatives');
+  if (ads.status !== 'ok' || creatives.status !== 'ok') { el.replaceChildren(); return; }
+  const byId = {};
+  for (const c of creatives.data || []) byId[c.id] = c;
+  const rows = sortRows((ads.data || []).filter((r) => r.campaign_id === p.campaign && (!p.adset || r.adset_id === p.adset)), 'amount_spent:desc');
+  el.replaceChildren(...rows.map((r) => creativeCard(r, byId[r.creative_id])));
+});
+
+dash.draw('creative-note', (el) => {
+  const p = dash.params();
+  const wanted = wantedCreatives(p);
+  if (!wanted || !wanted.length) { el.textContent = ''; return; }
+  if (!creativesReady(p)) { el.textContent = 'Loading creatives from Meta…'; return; }
+  const d = dash.data('creatives');
+  if (d.status === 'loading' || d.refreshing) { el.textContent = 'Loading creatives from Meta…'; return; }
+  if (d.status === 'error') { el.textContent = 'Creatives failed to load'; return; }
+  // Creatives run with each viewer's own Meta access, so a visitor without it gets the ads table only.
+  if (d.status !== 'ok') { el.textContent = 'Ad text and previews show only to people signed in to Openhouse’s Meta ad accounts. The table below lists every ad.'; return; }
+  el.textContent = 'Select Preview on a card to see that ad the way people see it on Instagram.';
+});
+
+dash.draw('ad-preview', (el) => {
+  const p = dash.params();
+  const d = dash.data('ad_preview');
+  if (d.status === 'error') { el.textContent = 'Failed to load the preview'; return; }
+  if (d.status !== 'ok' && d.status !== 'loading') { el.textContent = 'Previews show only to people signed in to Openhouse’s Meta ad accounts.'; return; }
+  const row = d.status === 'ok' ? (d.data || []).find((r) => r.ad_id === p.ad) : undefined;
+  if (!row || d.refreshing) { el.textContent = 'Getting the preview from Meta…'; return; }
+  const ads = dash.data('ads');
+  const ad = ads.status === 'ok' ? (ads.data || []).find((r) => r.id === p.ad) : undefined;
+  const parts = [];
+  if (typeof row.image === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/.test(row.image)) {
+    const img = new Image();
+    img.className = 'oh-preview-img';
+    img.alt = 'Preview of the ad ' + ((ad && ad.name) || '');
+    img.src = row.image;
+    parts.push(img);
+  }
+  const side = make('div', 'oh-preview-side');
+  side.append(make('strong', '', (ad && ad.name) || 'Selected ad'));
+  if (row.placement) side.append(make('span', 'oh-note', 'As shown in ' + row.placement));
+  if (!parts.length) side.append(make('span', 'oh-note', 'Meta didn’t send a picture for this ad. Its own preview opens in a new tab.'));
+  if (row.preview_url && /^https:\/\/(business|www)\.facebook\.com\//.test(row.preview_url)) side.append(outLink(row.preview_url, 'Open Meta’s preview'));
+  parts.push(side);
+  el.replaceChildren(...parts);
+});
+
+dash.draw('ad-rows', (tbody) => {
+  const d = dash.data('ads');
+  if (d.status !== 'ok') { tbody.replaceChildren(); return; }
+  const p = dash.params();
+  const rows = sortRows(withTickets((d.data || []).filter((r) => r.campaign_id === p.campaign && (!p.adset || r.adset_id === p.adset)), 'ad_tickets'), 'amount_spent:desc');
+  tbody.replaceChildren(...rows.map((r) => buildRow(r, r.adset_name ? 'Ad set: ' + r.adset_name : '', null, false)));
+});
+
+dash.draw('ad-note', (el) => {
+  const d = dash.data('ads');
+  const p = dash.params();
+  if (d.status === 'loading' || d.refreshing) { el.textContent = 'Loading ads from Meta…'; return; }
+  if (d.status === 'error') { el.textContent = 'Failed to load'; return; }
+  if (d.status !== 'ok') { el.textContent = ''; return; }
+  const n = (d.data || []).filter((r) => r.campaign_id === p.campaign && (!p.adset || r.adset_id === p.adset)).length;
+  el.textContent = n ? '' : 'No ads to show here.';
+});
+
+// ---- Views, controls and loading states ----
+
+// A query that starts before the period's dates are filled in is refused; retry each such query once.
+const retriedOnce = new Set();
+
+dash.onData(() => {
+  const p = dash.params();
+  const drilling = isDrilling(p);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(p.since || '') && /^\d{4}-\d{2}-\d{2}$/.test(p.until || '')) {
+    for (const id of [...CATALOG_SOURCES, ...CAMPAIGN_SOURCES, ...trendSources(p)]) {
+      if (dash.data(id).status === 'error' && !retriedOnce.has(id)) {
+        retriedOnce.add(id);
+        setTimeout(() => dash.refresh(id), 0);
+      }
+    }
+  }
+
+  // The Campaign filter sends the picked campaign's Meta campaign IDs; keep them in step with the campaign list.
+  const picked = namedCampaign(p.prog);
+  const list = dash.data('named_campaigns');
+  if (p.prog && picked) {
+    const ids = picked.ids.length ? picked.ids : ['0'];
+    if (String(p.gids) !== String(ids) || p.gop !== 'IN' || p.pname !== picked.who) dash.setParams({ gids: ids, gop: 'IN', pname: picked.who });
+  } else if (p.prog && list.status === 'ok' && !list.refreshing) {
+    pickCampaign('');
+  } else if (!p.prog && (p.gop !== 'NOT_IN' || String(p.gids) !== '0')) {
+    dash.setParams({ gop: 'NOT_IN', gids: ['0'] });
+  }
+  syncPeriod();
+  const wantDaily = wantedGroupDaily(dash.params());
+  if (wantDaily && (String(dash.params().gdids) !== String(wantDaily.ids) || dash.params().gstep !== wantDaily.step)) dash.setParams({ gdids: wantDaily.ids, gstep: wantDaily.step });
+  const now = dash.params();
+  const dailyReady = groupDailyReady(now);
+  for (const el of document.querySelectorAll('#trend-chart')) el.hidden = Boolean(now.prog);
+  for (const el of document.querySelectorAll('#gtrend-chart')) el.hidden = !(now.prog && dailyReady);
+  for (const el of document.querySelectorAll('#gtrend-wait')) el.hidden = !(now.prog && !dailyReady);
+  for (const el of document.querySelectorAll('#camp-note')) el.hidden = !now.prog;
+  for (const el of document.querySelectorAll('#oh-range-campaign')) el.hidden = !isOneCampaign(now);
+
+  for (const el of document.querySelectorAll('#overview')) el.hidden = drilling;
+  for (const el of document.querySelectorAll('#drill')) el.hidden = !drilling;
+  for (const el of document.querySelectorAll('#oh-all-ads')) el.hidden = !p.adset;
+  for (const el of document.querySelectorAll('#oh-range')) {
+    if (document.activeElement !== el) el.value = p.range || 'last_7d';
+  }
+  const [sortKey, sortDir] = String(p.csort || 'amount_spent:desc').split(':');
+  for (const th of document.querySelectorAll('#campaign-table th')) {
+    const btn = th.querySelector('.oh-sort');
+    if (btn) th.setAttribute('aria-sort', btn.dataset.sort === sortKey ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+  }
+  // Show hiring, enquiry and ticket-sales figures only when the Meta campaigns shown include that kind.
+  const kpis = dash.data('kpis');
+  const kpiRow = kpis.status === 'ok' ? (kpis.data || []).find((r) => r.account === (p.acct || 'all')) : undefined;
+  const shows = (count) => (kpis.status === 'ok' ? Boolean(kpiRow && kpiRow[count] > 0) : true);
+  const showFor = { hiring: shows('hiring_campaigns'), enquiries: shows('enquiry_campaigns'), sales: shows('sales_campaigns') };
+  for (const el of document.querySelectorAll('#summary [data-purpose], #kpis [data-purpose]')) el.hidden = !showFor[el.dataset.purpose];
+  const open = drilling ? selectedCampaign() : undefined;
+  const hideLeads = Boolean(open) && open.purpose === 'Ticket sales' && !((open.lead || 0) > 0);
+  const hideSales = Boolean(open) && (open.purpose === 'Hiring' || (open.purpose === 'Enquiries' && !((open.omni_purchase || 0) > 0)));
+  for (const el of document.querySelectorAll('#campaign-kpis [data-purpose]')) {
+    el.hidden = el.dataset.purpose === 'leads' ? hideLeads : hideSales;
+  }
+  for (const el of document.querySelectorAll('.oh-dot--hiring')) el.style.background = purposeColor('Hiring');
+  for (const el of document.querySelectorAll('.oh-dot--enquiries')) el.style.background = purposeColor('Enquiries');
+  for (const el of document.querySelectorAll('.oh-dot--sales')) el.style.background = purposeColor('Ticket sales');
+
+  // Creatives wait until the open campaign's creative IDs are known.
+  const wanted = drilling ? wantedCreatives(p) : null;
+  if (wanted && wanted.length && String(p.creatives) !== String(wanted)) dash.setParams({ creatives: wanted });
+  for (const el of document.querySelectorAll('#creative-gallery')) el.hidden = !(drilling && creativesReady(p));
+  for (const el of document.querySelectorAll('#ad-preview-panel')) el.hidden = !(drilling && p.pv === '1' && Boolean(p.ad));
+
+  const loading = (id) => dash.data(id).status === 'loading';
+  for (const el of document.querySelectorAll('#campaign-wrap')) el.classList.toggle('dash-skeleton', loading('campaigns'));
+  if (drilling) {
+    for (const el of document.querySelectorAll('#adset-wrap')) el.classList.toggle('dash-skeleton', loading('adsets'));
+    for (const el of document.querySelectorAll('#ad-wrap')) el.classList.toggle('dash-skeleton', loading('ads'));
+  }
+});
+
+for (const el of document.querySelectorAll('#oh-range')) {
+  el.addEventListener('change', () => {
+    const p = dash.params();
+    if (!PERIODS[el.value] || (el.value === 'campaign' && !isOneCampaign(p))) return;
+    dash.setParams({ range: el.value, ...periodDates(el.value), ...queryShape(el.value, p.prog) });
+  });
+}
+for (const el of document.querySelectorAll('#oh-refresh')) el.addEventListener('click', refreshAll);
+for (const el of document.querySelectorAll('#oh-back')) el.addEventListener('click', () => dash.setParams({ view: '' }));
+for (const el of document.querySelectorAll('#oh-all-ads')) el.addEventListener('click', () => dash.setParams({ adset: '', aname: '' }));
+for (const el of document.querySelectorAll('#oh-preview-close')) el.addEventListener('click', () => dash.setParams({ pv: '' }));
+for (const btn of document.querySelectorAll('#campaign-table .oh-sort')) {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.sort;
+    const [current, dir] = String(dash.params().csort || 'amount_spent:desc').split(':');
+    const next = current === key ? (dir === 'desc' ? 'asc' : 'desc') : (key === 'name' ? 'asc' : 'desc');
+    dash.setParams({ csort: key + ':' + next });
+  });
+}
+</script>
