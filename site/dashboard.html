@@ -201,6 +201,7 @@ th[aria-sort="descending"] .oh-sort, th[aria-sort="ascending"] .oh-sort { color:
         </table>
       </div>
       <p class="oh-note" data-draw="campaign-note"></p>
+      <p class="oh-note" id="sheet-note" data-draw="sheet-note" data-source="sheet_sales"></p>
     </section>
   </div>
 
@@ -412,6 +413,38 @@ dash.loader('ad_preview', {
   },
 });
 
+// The At-Home bookings sheet: only its booking columns (A–F) and link-tag columns (X–Z) are read. The columns between hold parents' details and are never asked for.
+dash.loader('athome_bookings', {
+  description: 'Lines up the At-Home bookings sheet’s booking columns (A–F) with its link-tag columns (X–Z), row by row, and reads each booking’s day and amount in rupees including GST.',
+  fn: ({ answer }) => {
+    if (answer && answer.error) throw new Error(typeof answer.error === 'string' ? answer.error : (answer.error.message || 'Google Sheets returned an error.'));
+    const sheets = ((answer && answer.content) || answer || {}).sheets;
+    const blocks = (sheets && sheets[0] && sheets[0].data) || [];
+    if (!blocks.length) throw new Error('Google Sheets sent no rows from the At-Home bookings sheet.');
+    const cells = (block) => ((block && block.rowData) || []).map((r) => ((r && r.values) || []).map((v) => (v && v.formattedValue != null ? String(v.formattedValue) : '')));
+    const main = cells(blocks.find((b) => !b.startColumn) || blocks[0]);
+    const tags = cells(blocks.find((b) => b.startColumn === 23) || blocks[1]);
+    const months = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+    // "14 Nov 2026, 20:04" → 2026-11-14
+    const dayOf = (text) => {
+      const m = /^(\d{1,2}) ([A-Za-z]{3})[a-z]* (\d{4})/.exec(String(text || '').trim());
+      return m && months[m[2].toLowerCase()] ? m[3] + '-' + months[m[2].toLowerCase()] + '-' + m[1].padStart(2, '0') : null;
+    };
+    const rows = [];
+    for (let i = 1; i < main.length; i++) {
+      const [ref, bookedAt, status, subject, plan, total] = main[i];
+      if (!ref) continue;
+      const [source, medium, campaign] = tags[i] || [];
+      const amount = Number(String(total || '').replace(/[^0-9.]/g, ''));
+      rows.push({
+        booking_ref: ref, booked_on: dayOf(bookedAt), status: status || null, subject: subject || null, plan: plan || null,
+        amount: Number.isFinite(amount) ? amount : 0, utm_source: source || null, utm_medium: medium || null, utm_campaign: campaign || null,
+      });
+    }
+    return rows;
+  },
+});
+
 // ---- Named campaigns: the Meta campaigns of one push, such as Halloween 2026 or Afterschool November 2026 ----
 
 const OH_ACCOUNTS = ['428357117849129', '605518854162850', '324083576441691', '1643698160129047'];
@@ -546,9 +579,9 @@ dash.calc('named_campaigns', {
   },
 });
 
-dash.calc('campaigns', {
+dash.calc('campaigns_meta', {
   inputs: ['camp_oh2', 'camp_temp', 'camp_backup', 'camp_oh4', 'campaign_names', 'ticket_prices'],
-  title: 'Meta campaigns across Openhouse accounts',
+  title: 'Meta campaigns as Meta reports them',
   description: 'Meta campaigns from the four Openhouse ad accounts that spent, got leads or purchases in the period, or are running, each with the named campaign it belongs to (from the Campaign names list, or else the naming rules) and its purpose: Hiring; Ticket sales for playdates, events and any campaign with a ticket price; Enquiries for preschool admissions, afterschool, toddler club, summer camp and teacher training. Link CTR = link clicks ÷ impressions; cost per link click, lead and purchase = spend ÷ that count; CPM = spend per 1,000 impressions; frequency = impressions ÷ reach.',
   fn: (openhouse2, openhouseTemp, openhouseBackup, openhouse4, campaignNames, ticketPrices) => {
     const teamNames = teamNamesFrom(campaignNames);
@@ -575,33 +608,107 @@ dash.calc('campaigns', {
   },
 });
 
-// Ticket sales = purchases × the campaign's ticket price × 1.18 (18% GST); one purchase = one ticket.
-dash.calc('ticket_sales', {
-  inputs: ['campaigns', 'ticket_prices'],
-  title: 'Ticket sales by campaign',
-  description: 'Purchases × the campaign’s ticket price from the Ticket prices list × 1.18 for 18% GST. One purchase counts as one ticket. ROAS is ticket sales ÷ amount spent. A playdate or event campaign with purchases but no price is flagged as needing one.',
-  fn: (campaigns, ticketPrices) => {
-    const gst = 0.18;
-    const round = (v) => Math.round(v * 100) / 100;
-    const priceBeforeGst = {};
-    for (const p of ticketPrices) {
-      const text = String(p.price_before_gst ?? '').replace(/[^0-9.]/g, '');
-      if (p.campaign_id && text !== '') priceBeforeGst[String(p.campaign_id).trim()] = Number(text);
+// The At-Home campaign's bookings land in its own Google Sheet, which Meta doesn't see: they replace Meta's purchases for that campaign.
+dash.calc('sheet_sales', {
+  inputs: ['athome_bookings', 'programs'],
+  title: 'At-Home bookings by Meta campaign',
+  description: 'Bookings in the At-Home bookings sheet whose link tags name a Meta campaign, by its ID or its name, counted for the chosen period with their amounts including GST. Cancelled, refunded or failed bookings are left out. Bookings without a campaign tag aren’t given to any campaign and are counted on their own.',
+  fn: (bookings, programs) => {
+    const { since, until } = dash.params();
+    const norm = (s) => String(s || '').replace(/\+/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().toLowerCase();
+    const ids = new Set(programs.map((p) => p.id));
+    const byName = {};
+    for (const p of programs) byName[norm(p.meta_name)] = p.id;
+    const campaignOf = (b) => {
+      const tag = String(b.utm_campaign || '').trim();
+      return /^\d+$/.test(tag) && ids.has(tag) ? tag : byName[norm(tag)] || null;
+    };
+    const counted = bookings.filter((b) => !/cancel|refund|fail/i.test(b.status || ''));
+    const inPeriod = (b) => b.booked_on && b.booked_on >= since && b.booked_on <= until;
+    const untagged = counted.filter((b) => inPeriod(b) && !campaignOf(b)).length;
+    const out = {};
+    for (const b of counted) {
+      const id = campaignOf(b);
+      if (!id) continue;
+      const row = out[id] || (out[id] = { id, purchases: 0, sales: 0, untagged_bookings: untagged });
+      if (!inPeriod(b)) continue;
+      row.purchases += 1;
+      row.sales = Math.round((row.sales + (b.amount || 0)) * 100) / 100;
     }
-    return campaigns.map((c) => {
-      const before = priceBeforeGst[c.id];
-      const purchases = c.omni_purchase || 0;
-      const ticketPrice = before == null ? null : round(before * (1 + gst));
-      const sales = ticketPrice == null ? null : round(purchases * ticketPrice);
+    return Object.values(out);
+  },
+});
+
+dash.calc('campaigns', {
+  inputs: ['campaigns_meta', 'sheet_sales'],
+  title: 'Meta campaigns across Openhouse accounts',
+  description: 'The Meta campaigns as Meta reports them, except that a campaign whose bookings the At-Home bookings sheet records takes its purchases from the sheet, counts towards ticket sales, and has its cost per purchase worked out again: spend ÷ those purchases.',
+  fn: (metaCampaigns, sheetSales) => {
+    const bySheet = {};
+    for (const s of sheetSales) bySheet[s.id] = s;
+    return metaCampaigns.map((c) => {
+      const s = bySheet[c.id];
+      if (!s) return { ...c, purchases_from: 'Meta' };
+      const spend = c.amount_spent || 0;
       return {
-        id: c.id,
-        ticket_price: ticketPrice,
-        ticket_sales: sales,
-        ticket_roas: sales != null && (c.amount_spent || 0) > 0 ? round(sales / c.amount_spent) : null,
-        price_needed: before == null && purchases > 0 && c.purpose === 'Ticket sales',
+        ...c,
+        meta_purchases: c.omni_purchase,
+        omni_purchase: s.purchases,
+        cost_per_omni_purchase: s.purchases > 0 ? Math.round((spend / s.purchases) * 100) / 100 : null,
+        purpose: c.purpose === 'Hiring' ? c.purpose : 'Ticket sales',
+        purchases_from: 'At-Home bookings sheet',
       };
     });
   },
+});
+
+// Ticket sales = purchases × the campaign's ticket price × 1.18 (18% GST); one purchase = one ticket.
+// A campaign the At-Home bookings sheet records takes its sales from the sheet's amounts instead.
+const ticketSalesOf = (campaigns, ticketPrices, sheetSales = []) => {
+  const gst = 0.18;
+  const round = (v) => Math.round(v * 100) / 100;
+  const priceBeforeGst = {};
+  for (const p of ticketPrices) {
+    const text = String(p.price_before_gst ?? '').replace(/[^0-9.]/g, '');
+    if (p.campaign_id && text !== '') priceBeforeGst[String(p.campaign_id).trim()] = Number(text);
+  }
+  const fromSheet = {};
+  for (const s of sheetSales) fromSheet[s.id] = s;
+  return campaigns.map((c) => {
+    const sheet = fromSheet[c.id];
+    if (sheet) {
+      return {
+        id: c.id,
+        ticket_price: sheet.purchases > 0 ? round(sheet.sales / sheet.purchases) : null,
+        ticket_sales: sheet.sales,
+        ticket_roas: (c.amount_spent || 0) > 0 ? round(sheet.sales / c.amount_spent) : null,
+        price_needed: false,
+      };
+    }
+    const before = priceBeforeGst[c.id];
+    const purchases = c.omni_purchase || 0;
+    const ticketPrice = before == null ? null : round(before * (1 + gst));
+    const sales = ticketPrice == null ? null : round(purchases * ticketPrice);
+    return {
+      id: c.id,
+      ticket_price: ticketPrice,
+      ticket_sales: sales,
+      ticket_roas: sales != null && (c.amount_spent || 0) > 0 ? round(sales / c.amount_spent) : null,
+      price_needed: before == null && purchases > 0 && c.purpose === 'Ticket sales',
+    };
+  });
+};
+dash.calc('ticket_sales', {
+  inputs: ['campaigns', 'ticket_prices', 'sheet_sales'],
+  title: 'Ticket sales by campaign',
+  description: 'Purchases × the campaign’s ticket price from the Ticket prices list × 1.18 for 18% GST. One purchase counts as one ticket. The At-Home campaign uses the amounts in its bookings sheet instead, which include GST. ROAS is ticket sales ÷ amount spent. A playdate or event campaign with purchases but no price is flagged as needing one.',
+  fn: ticketSalesOf,
+});
+dash.calc('ticket_sales_meta', {
+  inputs: ['campaigns_meta', 'ticket_prices'],
+  title: 'Ticket sales by campaign, Meta’s purchases only',
+  description: 'The same ticket sales from Meta’s purchases alone, shown when the At-Home bookings sheet can’t be read.',
+  fn: ticketSalesOf,
 });
 
 dash.calc('adset_tickets', {
@@ -644,61 +751,69 @@ dash.calc('ad_tickets', {
   },
 });
 
+const KPI_DESCRIPTION = 'Spend, results and rates added up from the Meta campaigns shown (one named campaign’s when the Campaign filter is set), for each account and for all Openhouse accounts together. Hiring figures use the hiring campaigns. Enquiry figures use preschool admissions, afterschool, toddler club, summer camp and teacher training campaigns. Ticket-sales figures use playdate and event campaigns, any campaign with a ticket price and the At-Home campaign, boosts and video campaigns included; campaigns with purchases but no ticket price are left out of ticket sales and ROAS.';
+const kpisOf = (campaigns, ticketSalesByCampaign) => {
+  const tickets = {};
+  for (const t of ticketSalesByCampaign) tickets[t.id] = t;
+  const round = (v) => (v == null ? null : Math.round(v * 100) / 100);
+  const total = (rows, key) => rows.reduce((s, r) => s + (r[key] || 0), 0);
+  const ratio = (a, b) => (b > 0 ? a / b : null);
+  const groups = { all: campaigns };
+  for (const c of campaigns) (groups[c.account_id] = groups[c.account_id] || []).push(c);
+  return Object.entries(groups).map(([account, rows]) => {
+    const hiring = rows.filter((r) => r.purpose === 'Hiring');
+    const enquiries = rows.filter((r) => r.purpose === 'Enquiries');
+    const ticketSales = rows.filter((r) => r.purpose === 'Ticket sales');
+    const spend = total(rows, 'amount_spent');
+    const impressions = total(rows, 'impressions');
+    const linkClicks = total(rows, 'link_click');
+    const hiringSpend = total(hiring, 'amount_spent');
+    const hiringLeads = total(hiring, 'lead');
+    const enquirySpend = total(enquiries, 'amount_spent');
+    const enquiryLeads = total(enquiries, 'lead');
+    const salesSpend = total(ticketSales, 'amount_spent');
+    const ticketPurchases = total(ticketSales, 'omni_purchase');
+    const priced = ticketSales.filter((r) => !(tickets[r.id] && tickets[r.id].price_needed));
+    const ticketValue = priced.reduce((s, r) => s + ((tickets[r.id] && tickets[r.id].ticket_sales) || 0), 0);
+    const pricedSpend = total(priced, 'amount_spent');
+    return {
+      account,
+      campaigns: rows.length,
+      spend: round(spend),
+      impressions,
+      link_clicks: linkClicks,
+      link_ctr: round(ratio(linkClicks * 100, impressions)),
+      cpc: round(ratio(spend, linkClicks)),
+      cpm: round(ratio(spend * 1000, impressions)),
+      hiring_spend: round(hiringSpend),
+      hiring_leads: hiringLeads,
+      cost_per_hiring_lead: round(ratio(hiringSpend, hiringLeads)),
+      enquiry_spend: round(enquirySpend),
+      enquiry_leads: enquiryLeads,
+      cost_per_enquiry: round(ratio(enquirySpend, enquiryLeads)),
+      hiring_campaigns: hiring.length,
+      enquiry_campaigns: enquiries.length,
+      sales_campaigns: ticketSales.length,
+      sales_spend: round(salesSpend),
+      ticket_purchases: ticketPurchases,
+      cost_per_ticket_purchase: round(ratio(salesSpend, ticketPurchases)),
+      ticket_sales: round(ticketValue),
+      ticket_roas: round(ratio(ticketValue, pricedSpend)),
+      campaigns_needing_price: ticketSales.length - priced.length,
+    };
+  });
+};
 dash.calc('kpis', {
   inputs: ['campaigns', 'ticket_sales'],
   title: 'Totals by account',
-  description: 'Spend, results and rates added up from the Meta campaigns shown (one named campaign’s when the Campaign filter is set), for each account and for all Openhouse accounts together. Hiring figures use the hiring campaigns. Enquiry figures use preschool admissions, afterschool, toddler club, summer camp and teacher training campaigns. Ticket-sales figures use playdate and event campaigns and any campaign with a ticket price, boosts and video campaigns included; campaigns with purchases but no ticket price are left out of ticket sales and ROAS.',
-  fn: (campaigns, ticketSalesByCampaign) => {
-    const tickets = {};
-    for (const t of ticketSalesByCampaign) tickets[t.id] = t;
-    const round = (v) => (v == null ? null : Math.round(v * 100) / 100);
-    const total = (rows, key) => rows.reduce((s, r) => s + (r[key] || 0), 0);
-    const ratio = (a, b) => (b > 0 ? a / b : null);
-    const groups = { all: campaigns };
-    for (const c of campaigns) (groups[c.account_id] = groups[c.account_id] || []).push(c);
-    return Object.entries(groups).map(([account, rows]) => {
-      const hiring = rows.filter((r) => r.purpose === 'Hiring');
-      const enquiries = rows.filter((r) => r.purpose === 'Enquiries');
-      const ticketSales = rows.filter((r) => r.purpose === 'Ticket sales');
-      const spend = total(rows, 'amount_spent');
-      const impressions = total(rows, 'impressions');
-      const linkClicks = total(rows, 'link_click');
-      const hiringSpend = total(hiring, 'amount_spent');
-      const hiringLeads = total(hiring, 'lead');
-      const enquirySpend = total(enquiries, 'amount_spent');
-      const enquiryLeads = total(enquiries, 'lead');
-      const salesSpend = total(ticketSales, 'amount_spent');
-      const ticketPurchases = total(ticketSales, 'omni_purchase');
-      const priced = ticketSales.filter((r) => !(tickets[r.id] && tickets[r.id].price_needed));
-      const ticketValue = priced.reduce((s, r) => s + ((tickets[r.id] && tickets[r.id].ticket_sales) || 0), 0);
-      const pricedSpend = total(priced, 'amount_spent');
-      return {
-        account,
-        campaigns: rows.length,
-        spend: round(spend),
-        impressions,
-        link_clicks: linkClicks,
-        link_ctr: round(ratio(linkClicks * 100, impressions)),
-        cpc: round(ratio(spend, linkClicks)),
-        cpm: round(ratio(spend * 1000, impressions)),
-        hiring_spend: round(hiringSpend),
-        hiring_leads: hiringLeads,
-        cost_per_hiring_lead: round(ratio(hiringSpend, hiringLeads)),
-        enquiry_spend: round(enquirySpend),
-        enquiry_leads: enquiryLeads,
-        cost_per_enquiry: round(ratio(enquirySpend, enquiryLeads)),
-        hiring_campaigns: hiring.length,
-        enquiry_campaigns: enquiries.length,
-        sales_campaigns: ticketSales.length,
-        sales_spend: round(salesSpend),
-        ticket_purchases: ticketPurchases,
-        cost_per_ticket_purchase: round(ratio(salesSpend, ticketPurchases)),
-        ticket_sales: round(ticketValue),
-        ticket_roas: round(ratio(ticketValue, pricedSpend)),
-        campaigns_needing_price: ticketSales.length - priced.length,
-      };
-    });
-  },
+  description: KPI_DESCRIPTION,
+  fn: kpisOf,
+});
+dash.calc('kpis_meta', {
+  inputs: ['campaigns_meta', 'ticket_sales_meta'],
+  title: 'Totals by account, Meta’s purchases only',
+  description: KPI_DESCRIPTION + ' This copy uses Meta’s purchases alone and shows when the At-Home bookings sheet can’t be read.',
+  fn: kpisOf,
 });
 
 dash.calc('daily', {
@@ -947,6 +1062,14 @@ const withTickets = (rows, source) => {
 
 const isDrilling = (p) => p.view === 'campaign' && Boolean(p.campaign);
 
+// The At-Home bookings sheet loads with each reader's own Google access. Where it can't, the figures fall back to Meta's alone.
+const pick = (id) => {
+  const d = dash.data(id);
+  if (d.status === 'ok' || d.status === 'loading') return { id, d };
+  const meta = dash.data(id + '_meta');
+  return meta.status === 'missing' ? { id, d } : { id: id + '_meta', d: meta };
+};
+
 const sortRows = (rows, spec) => {
   const [key, dir] = String(spec || 'amount_spent:desc').split(':');
   const sign = dir === 'asc' ? 1 : -1;
@@ -1036,7 +1159,7 @@ const trendSources = (p) => (p.prog ? (groupDailyReady(p) ? GROUP_DAILY_SOURCES 
 const refreshAll = () => {
   syncPeriod();
   const p = dash.params();
-  for (const id of [...CATALOG_SOURCES, ...CAMPAIGN_SOURCES, ...trendSources(p)]) dash.refresh(id);
+  for (const id of [...CATALOG_SOURCES, ...CAMPAIGN_SOURCES, ...trendSources(p), 'athome_bookings']) dash.refresh(id);
   if (isDrilling(p)) {
     for (const id of DRILL_SOURCES) dash.refresh(id);
     if (creativesReady(p)) dash.refresh('creatives');
@@ -1059,7 +1182,7 @@ const creativesReady = (p) => {
 // The picked campaign's chart asks only for its Meta campaigns that spent in the period, by day,
 // or by week or month when that would be too many rows.
 const wantedGroupDaily = (p) => {
-  const d = dash.data('campaigns');
+  const d = pick('campaigns').d;
   if (!p.prog || p.gop !== 'IN' || d.status !== 'ok' || d.refreshing) return null;
   const inGroup = new Set((p.gids || []).map(String));
   const rows = d.data || [];
@@ -1168,13 +1291,13 @@ dash.draw('camp-note', (el) => {
 
 dash.draw('kpi', (el) => {
   const key = el.dataset.k;
-  const d = dash.data('kpis');
+  const { id: kpiSource, d } = pick('kpis');
   el.classList.toggle('dash-skeleton', d.status === 'loading');
   if (d.status !== 'ok') { el.textContent = '—'; return; }
   const acct = dash.params().acct || 'all';
   const row = (d.data || []).find((r) => r.account === acct);
   if (!row) { el.textContent = KPI_ZERO_WHEN_EMPTY.includes(key) ? '0' : '—'; return; }
-  el.replaceChildren(markedValue('kpis', key, 'account=' + acct, FORMATS[KPI_FORMAT[key]](row[key])));
+  el.replaceChildren(markedValue(kpiSource, key, 'account=' + acct, FORMATS[KPI_FORMAT[key]](row[key])));
 });
 
 dash.draw('acct-select', (sel) => {
@@ -1310,10 +1433,10 @@ dash.draw('trend', {
 });
 
 dash.draw('campaign-rows', (tbody) => {
-  const d = dash.data('campaigns');
+  const { id: source, d } = pick('campaigns');
   if (d.status !== 'ok') { tbody.replaceChildren(); return; }
   const p = dash.params();
-  const rows = sortRows(withTickets((d.data || []).filter((r) => !p.acct || r.account_id === p.acct), 'ticket_sales'), p.csort);
+  const rows = sortRows(withTickets((d.data || []).filter((r) => !p.acct || r.account_id === p.acct), source === 'campaigns' ? 'ticket_sales' : 'ticket_sales_meta'), p.csort);
   tbody.replaceChildren(...rows.map((r) => buildRow(
     r,
     [r.campaign, accountName(r.account_id), r.objective ? (OBJECTIVES[r.objective] || words(r.objective)) + ' objective' : ''].filter(Boolean).join(' · '),
@@ -1324,8 +1447,8 @@ dash.draw('campaign-rows', (tbody) => {
 });
 
 dash.draw('price-note', (el) => {
-  const t = dash.data('ticket_sales');
-  const c = dash.data('campaigns');
+  const t = pick('ticket_sales').d;
+  const c = pick('campaigns').d;
   if (t.status !== 'ok' || c.status !== 'ok') { el.textContent = ''; return; }
   const acct = dash.params().acct;
   const needed = new Set((t.data || []).filter((r) => r.price_needed).map((r) => r.id));
@@ -1336,7 +1459,7 @@ dash.draw('price-note', (el) => {
 });
 
 dash.draw('campaign-note', (el) => {
-  const d = dash.data('campaigns');
+  const d = pick('campaigns').d;
   if (d.status === 'loading') { el.textContent = 'Loading campaigns from Meta…'; return; }
   if (d.status === 'error') { el.textContent = 'Failed to load'; return; }
   if (d.status !== 'ok') { el.textContent = ''; return; }
@@ -1345,12 +1468,37 @@ dash.draw('campaign-note', (el) => {
   el.textContent = n ? '' : p.prog ? 'None of this campaign’s Meta campaigns spent anything in this period.' : 'No Meta campaign spent anything in this period.';
 });
 
+// Says where the At-Home campaign's purchases come from, or that the sheet couldn't be read.
+dash.draw('sheet-note', (el) => {
+  const c = pick('campaigns');
+  const s = dash.data('sheet_sales');
+  const p = dash.params();
+  if (c.d.status !== 'ok') { el.textContent = ''; return; }
+  if (c.id !== 'campaigns') {
+    el.textContent = 'At-Home purchases here are Meta’s own count: the At-Home bookings sheet didn’t load for you. Connect Google Sheets in Sources, with access to that sheet, to see its bookings.';
+    return;
+  }
+  const shown = (c.d.data || []).filter((r) => r.purchases_from === 'At-Home bookings sheet' && (!p.acct || r.account_id === p.acct));
+  if (!shown.length || s.status !== 'ok') { el.textContent = ''; return; }
+  const parts = [];
+  for (const r of shown) {
+    const row = (s.data || []).find((x) => x.id === r.id);
+    const name = document.createElement('b');
+    name.textContent = r.name;
+    parts.push(document.createTextNode('Purchases for '), name, document.createTextNode(' are bookings from the At-Home bookings sheet made through its ads in this period: '),
+      markedValue('sheet_sales', 'purchases', 'id=' + r.id, FORMATS.count(row ? row.purchases : 0)), document.createTextNode(' worth '),
+      markedValue('sheet_sales', 'sales', 'id=' + r.id, FORMATS.money(row ? row.sales : 0)), document.createTextNode(' including GST. Meta reported ' + FORMATS.count(r.meta_purchases || 0) + '. '));
+    if (row && row.untagged_bookings > 0) parts.push(markedValue('sheet_sales', 'untagged_bookings', 'id=' + r.id, FORMATS.count(row.untagged_bookings)), document.createTextNode(' more bookings in the sheet have no ad tags, so no campaign gets them. '));
+  }
+  el.replaceChildren(...parts);
+});
+
 // ---- Drill-down: one campaign ----
 
 dash.draw('drill-title', (el) => { el.textContent = dash.params().cname || '—'; });
 
 const selectedCampaign = () => {
-  const d = dash.data('campaigns');
+  const d = pick('campaigns').d;
   const id = dash.params().campaign;
   return d.status === 'ok' ? (d.data || []).find((r) => r.id === id) : undefined;
 };
@@ -1370,11 +1518,11 @@ dash.draw('drill-sub', (el) => {
 
 dash.draw('ckpi', (el) => {
   const key = el.dataset.k;
-  const from = el.dataset.from || 'campaigns';
+  const from = pick(el.dataset.from || 'campaigns').id;
   const c = selectedCampaign();
   if (!c) { el.textContent = '—'; return; }
   let row = c;
-  if (from !== 'campaigns') {
+  if (!from.startsWith('campaigns')) {
     const d = dash.data(from);
     row = d.status === 'ok' ? (d.data || []).find((r) => r.id === c.id) : undefined;
     if (!row) { el.textContent = '—'; return; }
@@ -1383,7 +1531,7 @@ dash.draw('ckpi', (el) => {
 });
 
 dash.draw('ckpi-note', (el) => {
-  const d = dash.data('campaigns');
+  const d = pick('campaigns').d;
   el.textContent = d.status === 'ok' && !selectedCampaign() ? 'This campaign didn’t spend in the selected period.' : '';
 });
 
@@ -1623,7 +1771,7 @@ dash.onData(() => {
     if (btn) th.setAttribute('aria-sort', btn.dataset.sort === sortKey ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
   }
   // Show hiring, enquiry and ticket-sales figures only when the Meta campaigns shown include that kind.
-  const kpis = dash.data('kpis');
+  const kpis = pick('kpis').d;
   const kpiRow = kpis.status === 'ok' ? (kpis.data || []).find((r) => r.account === (p.acct || 'all')) : undefined;
   const shows = (count) => (kpis.status === 'ok' ? Boolean(kpiRow && kpiRow[count] > 0) : true);
   const showFor = { hiring: shows('hiring_campaigns'), enquiries: shows('enquiry_campaigns'), sales: shows('sales_campaigns') };
@@ -1645,7 +1793,7 @@ dash.onData(() => {
   for (const el of document.querySelectorAll('#ad-preview-panel')) el.hidden = !(drilling && p.pv === '1' && Boolean(p.ad));
 
   const loading = (id) => dash.data(id).status === 'loading';
-  for (const el of document.querySelectorAll('#campaign-wrap')) el.classList.toggle('dash-skeleton', loading('campaigns'));
+  for (const el of document.querySelectorAll('#campaign-wrap')) el.classList.toggle('dash-skeleton', pick('campaigns').d.status === 'loading');
   if (drilling) {
     for (const el of document.querySelectorAll('#adset-wrap')) el.classList.toggle('dash-skeleton', loading('adsets'));
     for (const el of document.querySelectorAll('#ad-wrap')) el.classList.toggle('dash-skeleton', loading('ads'));

@@ -213,6 +213,28 @@ def creative_text(c):
     }
 
 
+def athome_sheet():
+    """The At-Home bookings, from a published CSV of the sheet's non-personal columns (ATHOME_SHEET_CSV_URL):
+    Booking ref, Booked at, Status, Subject, Plan, Total, utm_source, utm_medium, utm_campaign.
+    Shaped like the Google Sheets answer the dashboard page reads. Without the URL the page shows Meta's count."""
+    url = os.environ.get('ATHOME_SHEET_CSV_URL', '').strip()
+    if not url:
+        return None
+    import csv
+    import io
+    with urllib.request.urlopen(url, timeout=60) as res:
+        rows = list(csv.reader(io.StringIO(res.read().decode('utf-8'))))
+    if not rows or len(rows[0]) < 9:
+        raise RuntimeError('The At-Home sheet feed needs 9 columns: booking columns A-F, then utm_source, utm_medium, utm_campaign.')
+    cell = lambda v: {'formattedValue': v}
+    line = lambda values: {'values': [cell(v) for v in values]} if any(values) else {}
+    log('  At-Home sheet     %d bookings' % (len(rows) - 1))
+    return {'content': {'sheets': [{'data': [
+        {'rowData': [line(r[:6]) for r in rows]},
+        {'startColumn': 23, 'rowData': [line(r[6:9]) for r in rows]},
+    ]}]}}
+
+
 # ---- The pull ----
 
 def main():
@@ -335,6 +357,9 @@ def main():
         'account_days': {a: sorted(v.values()) for a, v in account_days.items()},
         'account_months': {a: sorted(v.values()) for a, v in account_months.items()},
     }
+    sheet = athome_sheet()
+    if sheet:
+        snapshot['athome_sheet'] = sheet
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, 'w') as f:
         json.dump(snapshot, f, separators=(',', ':'))

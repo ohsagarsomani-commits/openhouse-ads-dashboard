@@ -13,11 +13,11 @@
   const ACCOUNT_OF = { oh2: '428357117849129', temp: '605518854162850', backup: '324083576441691', oh4: '1643698160129047' };
   const SOURCE_IDS = [];
   for (const k of Object.keys(ACCOUNT_OF)) SOURCE_IDS.push('catalog_' + k, 'camp_' + k, 'daily_' + k, 'gdaily_' + k);
-  SOURCE_IDS.push('campaign_names', 'ticket_prices', 'adsets', 'ads', 'creatives', 'ad_preview');
+  SOURCE_IDS.push('campaign_names', 'ticket_prices', 'adsets', 'ads', 'creatives', 'ad_preview', 'athome_bookings');
 
   // Which settings each question to Meta depends on.
   const DEPENDS = {
-    catalog: [], campaign_names: [], ticket_prices: [],
+    catalog: [], campaign_names: [], ticket_prices: [], athome_bookings: [],
     camp: ['gop', 'gids', 'xf', 'xop', 'climit', 'since', 'until', 'range'],
     daily: ['dstep', 'since', 'until'],
     gdaily: ['gdids', 'gstep', 'since', 'until'],
@@ -232,6 +232,9 @@
       rows.sort((x, y) => (y.amount_spent || 0) - (x.amount_spent || 0));
       return { ad_entities: rows.slice(0, 100) };
     },
+
+    // The At-Home bookings sheet, as Google Sheets answers: only its booking (A–F) and link-tag (X–Z) columns.
+    athome_bookings: () => DATA.athome_sheet || { error: 'The At-Home bookings sheet isn’t in this shared copy yet.' },
 
     creatives: (acct, p) => ({
       ad_creatives: (p.creatives || []).map(String).filter((id) => DATA.creatives[id]).map((id) => ({ id, ...DATA.creatives[id] })),

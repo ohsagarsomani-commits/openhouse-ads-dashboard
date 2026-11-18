@@ -68,6 +68,11 @@ const PATCHES = [
   ],
 ];
 let page = readFileSync(join(SITE, 'dashboard.html'), 'utf8');
+// This copy has no Google sign-in: if the At-Home sheet isn't in its data, say so plainly.
+PATCHES.push([
+  "the At-Home bookings sheet didn’t load for you. Connect Google Sheets in Sources, with access to that sheet, to see its bookings.",
+  "the At-Home bookings sheet isn’t in this copy of the dashboard yet.",
+]);
 // Where a table can't be filled, say why instead of "Failed to load".
 PATCHES.push(["if (d.status === 'error') { el.textContent = 'Failed to load'; return; }", "if (d.status === 'error') { el.textContent = d.error || 'Failed to load'; return; }", 'all']);
 for (const [from, to, all] of PATCHES) {

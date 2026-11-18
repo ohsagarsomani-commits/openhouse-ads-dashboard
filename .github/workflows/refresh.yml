@@ -50,6 +50,7 @@ jobs:
         if: steps.token.outputs.ready == 'true'
         env:
           META_TOKEN: ${{ secrets.META_TOKEN }}
+          ATHOME_SHEET_CSV_URL: ${{ secrets.ATHOME_SHEET_CSV_URL }}
         run: python3 scripts/fetch_meta.py --out data/snapshot.json
 
       - name: Lock the page with the password
