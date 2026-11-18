@@ -32,9 +32,10 @@ unset PW PW2
   git -c credential.helper= -c "credential.helper=!\"$GH\" auth git-credential" push -qf "https://github.com/$REPO.git" gh-pages
 )
 
-if ! "$GH" api "repos/$REPO/pages" >/dev/null 2>&1; then
-  "$GH" api -X POST "repos/$REPO/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null
-fi
+# Pushing gh-pages usually switches Pages on by itself; otherwise switch it on here.
+"$GH" api "repos/$REPO/pages" >/dev/null 2>&1 \
+  || "$GH" api -X POST "repos/$REPO/pages" -f "source[branch]=gh-pages" -f "source[path]=/" >/dev/null 2>&1 \
+  || true
 "$GH" api -X POST "repos/$REPO/pages/builds" >/dev/null 2>&1 || true
 echo
 echo "Published. It can take a minute or two to appear at:"
