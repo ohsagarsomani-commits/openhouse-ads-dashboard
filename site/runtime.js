@@ -276,7 +276,8 @@
       let changed = false;
       for (const c of calcs) {
         const ins = c.inputs.map((i) => state[i] || { status: 'loading', v: 0 });
-        const key = ins.map((s) => s.v).join('|');
+        // Like the live engine, a calc that reads the filters runs again when they change.
+        const key = ins.map((s) => s.v).join('|') + (c.usesParams ? '|' + JSON.stringify(params) : '');
         if (key === c.lastKey) continue;
         c.lastKey = key;
         changed = true;
@@ -339,7 +340,7 @@
     colors: ['#3d6fd6', '#d2643c', '#2e9b6c', '#8b5cc7', '#c99a2e', '#4a9fb5'],
     loader: (id, spec) => { loaders[id] = spec; },
     calc: (id, spec) => {
-      calcs.push({ id, inputs: spec.inputs || [], fn: spec.fn, lastKey: null });
+      calcs.push({ id, inputs: spec.inputs || [], fn: spec.fn, usesParams: /dash\.params\(/.test(String(spec.fn)), lastKey: null });
       if (!state[id]) set(id, { status: 'loading', data: null });
     },
     draw: (name, spec) => { draws.push({ name, spec: typeof spec === 'function' ? { update: spec } : spec, made: new WeakMap() }); },

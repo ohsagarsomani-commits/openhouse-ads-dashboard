@@ -612,7 +612,7 @@ dash.calc('campaigns_meta', {
 dash.calc('sheet_sales', {
   inputs: ['athome_bookings', 'programs'],
   title: 'At-Home bookings by Meta campaign',
-  description: 'Bookings in the At-Home bookings sheet whose link tags name a Meta campaign, by its ID or its name, counted for the chosen period with their amounts including GST. Cancelled, refunded or failed bookings are left out. Bookings without a campaign tag aren’t given to any campaign and are counted on their own.',
+  description: 'Every booking in the At-Home bookings sheet is a paid booking from the At-Home Meta ads: the booking page can only be reached from them. Each counts once, in the chosen period, with its amount including GST, for the Meta campaign its link tags name (by ID or by name). One without tags counts for the campaign of the nearest booking before it that has them. Cancelled, refunded or failed bookings would be left out.',
   fn: (bookings, programs) => {
     const { since, until } = dash.params();
     const norm = (s) => String(s || '').replace(/\+/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -623,18 +623,22 @@ dash.calc('sheet_sales', {
       const tag = String(b.utm_campaign || '').trim();
       return /^\d+$/.test(tag) && ids.has(tag) ? tag : byName[norm(tag)] || null;
     };
+    // Bookings in the sheet's own order, which is the order they were made.
     const counted = bookings.filter((b) => !/cancel|refund|fail/i.test(b.status || ''));
-    const inPeriod = (b) => b.booked_on && b.booked_on >= since && b.booked_on <= until;
-    const untagged = counted.filter((b) => inPeriod(b) && !campaignOf(b)).length;
+    const tagged = counted.map(campaignOf);
     const out = {};
-    for (const b of counted) {
-      const id = campaignOf(b);
-      if (!id) continue;
-      const row = out[id] || (out[id] = { id, purchases: 0, sales: 0, untagged_bookings: untagged });
-      if (!inPeriod(b)) continue;
+    counted.forEach((b, i) => {
+      let id = tagged[i];
+      const untagged = !id;
+      for (let j = i - 1; !id && j >= 0; j--) id = tagged[j];
+      for (let j = i + 1; !id && j < counted.length; j++) id = tagged[j];
+      if (!id) return;
+      const row = out[id] || (out[id] = { id, purchases: 0, sales: 0, untagged_bookings: 0 });
+      if (!(b.booked_on && b.booked_on >= since && b.booked_on <= until)) return;
       row.purchases += 1;
+      if (untagged) row.untagged_bookings += 1;
       row.sales = Math.round((row.sales + (b.amount || 0)) * 100) / 100;
-    }
+    });
     return Object.values(out);
   },
 });
@@ -1485,10 +1489,10 @@ dash.draw('sheet-note', (el) => {
     const row = (s.data || []).find((x) => x.id === r.id);
     const name = document.createElement('b');
     name.textContent = r.name;
-    parts.push(document.createTextNode('Purchases for '), name, document.createTextNode(' are bookings from the At-Home bookings sheet made through its ads in this period: '),
+    parts.push(document.createTextNode('Purchases for '), name, document.createTextNode(' are the paid bookings in the At-Home bookings sheet for this period: '),
       markedValue('sheet_sales', 'purchases', 'id=' + r.id, FORMATS.count(row ? row.purchases : 0)), document.createTextNode(' worth '),
       markedValue('sheet_sales', 'sales', 'id=' + r.id, FORMATS.money(row ? row.sales : 0)), document.createTextNode(' including GST. Meta reported ' + FORMATS.count(r.meta_purchases || 0) + '. '));
-    if (row && row.untagged_bookings > 0) parts.push(markedValue('sheet_sales', 'untagged_bookings', 'id=' + r.id, FORMATS.count(row.untagged_bookings)), document.createTextNode(' more bookings in the sheet have no ad tags, so no campaign gets them. '));
+    if (row && row.untagged_bookings > 0) parts.push(markedValue('sheet_sales', 'untagged_bookings', 'id=' + r.id, FORMATS.count(row.untagged_bookings)), document.createTextNode(' of them came without ad tags; they still count, since the booking page can only be reached from these ads. '));
   }
   el.replaceChildren(...parts);
 });
