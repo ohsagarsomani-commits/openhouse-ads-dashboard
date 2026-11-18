@@ -1,0 +1,74 @@
+name: Refresh dashboard
+
+# Every 2 hours: pull the numbers from Meta, lock the page with the password, publish it.
+on:
+  schedule:
+    - cron: '7 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      # Until the Meta token is saved as a secret, runs stop here quietly and the published page stays as it is.
+      - name: Check the Meta token is set
+        id: token
+        env:
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          PAGE_PASSWORD: ${{ secrets.PAGE_PASSWORD }}
+        run: |
+          if [ -n "$META_TOKEN" ] && [ -n "$PAGE_PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Skipped: save META_TOKEN and PAGE_PASSWORD as repository secrets to turn on the refresh." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.ready == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.token.outputs.ready == 'true'
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.ready == 'true'
+        with:
+          node-version: '22'
+
+      - name: Pull the numbers from Meta
+        if: steps.token.outputs.ready == 'true'
+        env:
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+        run: python3 scripts/fetch_meta.py --out data/snapshot.json
+
+      - name: Lock the page with the password
+        if: steps.token.outputs.ready == 'true'
+        env:
+          PAGE_PASSWORD: ${{ secrets.PAGE_PASSWORD }}
+        run: node scripts/build.mjs --data data/snapshot.json --out out
+
+      - name: Publish to the gh-pages branch
+        if: steps.token.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd out
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Dashboard numbers as of $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" gh-pages
+          # Only the latest version is kept, so the branch doesn't grow. Ask Pages to publish it.
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" --silent || true
