@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pbkdf2Sync, randomBytes, createCipheriv } from 'node:crypto';
+import { pbkdf2Sync, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 import readline from 'node:readline';
 import zlib, { gzipSync } from 'node:zlib';
 
@@ -28,6 +28,8 @@ const arg = (name, fallback) => {
 const dataPath = resolve(arg('data', join(ROOT, 'data', 'snapshot.json')));
 const outDir = resolve(arg('out', join(ROOT, 'out')));
 const plainPath = arg('plain', null);
+// --same-as <url>: refuse a password that doesn't open the page already published there, so a typo can't lock viewers out.
+const sameAs = arg('same-as', null);
 
 // ---- Lists kept with the page: campaign names and ticket prices ----
 const parseCsv = (text) => {
@@ -129,6 +131,23 @@ if (!password) {
   if (password !== again) throw new Error('The two passwords differ. Nothing was written.');
 }
 if (password.length < 10) throw new Error('Use a password of at least 10 characters.');
+
+if (sameAs) {
+  const live = await (await fetch(sameAs, { cache: 'no-store' })).text();
+  const m = /const LOCKED = (\{.*?\});\n/s.exec(live);
+  if (!m) throw new Error('No locked page found at ' + sameAs + '. Nothing was written.');
+  const locked = JSON.parse(m[1]);
+  const blob = Buffer.from(locked.data, 'base64');
+  try {
+    const decipher = createDecipheriv('aes-256-gcm', pbkdf2Sync(password, Buffer.from(locked.salt, 'base64'), locked.iterations, 32, 'sha256'), Buffer.from(locked.iv, 'base64'));
+    decipher.setAuthTag(blob.subarray(blob.length - 16));
+    decipher.update(blob.subarray(0, blob.length - 16));
+    decipher.final();
+  } catch (e) {
+    throw new Error('That password doesn’t open the page published now, so nothing was written. Type the password viewers already use.');
+  }
+  console.log('Password matches the published page.');
+}
 
 // The salt stays the same between builds, so a device that remembered the key keeps opening new versions.
 const saltFile = join(SITE, 'salt.txt');

@@ -21,6 +21,7 @@ No Meta numbers are ever committed to this repository. The `gh-pages` branch hol
 ## Changing things
 
 - **Password:** `gh secret set PAGE_PASSWORD`, then run the workflow (Actions → Refresh dashboard → Run workflow). Devices that remembered the old password ask again.
+- **Publish new numbers by hand:** `scripts/republish.sh path/to/snapshot.json`. It asks for the password once and checks it opens the page published now before changing anything.
 - **Campaign names or ticket prices:** edit `site/lists/campaign-names.csv` or `site/lists/ticket-prices.csv` and push. The next refresh uses them.
 - **Take it down:** Settings → Pages → Unpublish, or delete the repository.
 
