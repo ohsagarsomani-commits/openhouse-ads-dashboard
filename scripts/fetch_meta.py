@@ -85,21 +85,32 @@ def pages(path, params):
         page = call(nxt)
 
 
-def insights(account, params, label):
-    """Runs an insights report as a background job on Meta's side: big date ranges don't time out."""
+def insights(account, params, label, big=False):
+    """One insights report. Short periods are asked for directly. Big ones (all time, day by day) run as a
+    background job on Meta's side so they don't time out; a job that stalls is started again, up to 3 times."""
     body = {'use_unified_attribution_setting': 'true', 'limit': 500}
     body.update(params)
-    run = call('act_%s/insights' % account, body, method='POST')['report_run_id']
-    started = time.time()
-    while True:
-        status = call(run, {'fields': 'async_status,async_percent_completion'})
-        if status.get('async_status') == 'Job Completed':
+    if not big:
+        rows = list(pages('act_%s/insights' % account, body))
+        log('  %-16s %-26s %6d rows' % (ACCOUNTS[account], label, len(rows)))
+        return rows
+    for attempt in range(3):
+        run = call('act_%s/insights' % account, body, method='POST')['report_run_id']
+        started = time.time()
+        done = False
+        while time.time() - started < 480:
+            status = call(run, {'fields': 'async_status,async_percent_completion'})
+            if status.get('async_status') == 'Job Completed':
+                done = True
+                break
+            if status.get('async_status') in ('Job Failed', 'Job Skipped'):
+                break
+            time.sleep(5)
+        if done:
             break
-        if status.get('async_status') in ('Job Failed', 'Job Skipped'):
-            raise RuntimeError('Meta could not finish the %s report for %s.' % (label, ACCOUNTS[account]))
-        if time.time() - started > 1200:
-            raise RuntimeError('Meta took over 20 minutes on the %s report for %s.' % (label, ACCOUNTS[account]))
-        time.sleep(4)
+        log('  %-16s %-26s stalled at Meta, starting it again' % (ACCOUNTS[account], label))
+    else:
+        raise RuntimeError('Meta did not finish the %s report for %s after 3 tries.' % (label, ACCOUNTS[account]))
     rows = list(pages('%s/insights' % run, {'limit': 500}))
     log('  %-16s %-26s %6d rows' % (ACCOUNTS[account], label, len(rows)))
     return rows
@@ -268,7 +279,7 @@ def main():
 
     def run(job):
         account, level, preset, params = job
-        return job, insights(account, params, level + ' ' + preset)
+        return job, insights(account, params, level + ' ' + preset, big=preset in ('all_time', 'days'))
 
     with ThreadPoolExecutor(max_workers=6) as pool:
         results = list(pool.map(run, jobs))
