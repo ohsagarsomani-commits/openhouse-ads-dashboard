@@ -17,7 +17,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       # Until the Meta token is saved as a secret, runs stop here quietly and the published page stays as it is.
       - name: Check the Meta token is set
@@ -72,20 +72,21 @@ jobs:
         id: fetch
         if: steps.token.outputs.ready == 'true'
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           META_TOKEN: ${{ secrets.META_TOKEN }}
           ATHOME_SHEET_CSV_URL: ${{ secrets.ATHOME_SHEET_CSV_URL }}
         run: python3 scripts/fetch_meta.py --out data/snapshot.json --cache data/meta-cache.json
 
+      # Kept even when the pull stopped early, so the next run picks up where this one left off.
       - name: Lock what this run read
-        if: steps.token.outputs.ready == 'true' && steps.fetch.outcome == 'success'
+        if: always() && steps.token.outputs.ready == 'true' && hashFiles('data/meta-cache.json') != ''
         env:
           PAGE_PASSWORD: ${{ secrets.PAGE_PASSWORD }}
         run: openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PAGE_PASSWORD -in data/meta-cache.json -out cache/meta.enc
 
       - name: Keep it for the next run
-        if: steps.token.outputs.ready == 'true' && steps.fetch.outcome == 'success'
+        if: always() && steps.token.outputs.ready == 'true' && hashFiles('data/meta-cache.json') != ''
         uses: actions/cache/save@v4
         with:
           path: cache/meta.enc

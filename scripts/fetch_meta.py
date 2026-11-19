@@ -358,6 +358,19 @@ def main():
         except ValueError:
             cache = {}
     recent = {level: {t[0] for t in totals[level]['last_30d']} for level in ('adset', 'ad')}
+
+    # What has been read so far is saved as it goes, so a run that runs out of time still spares the next one the work.
+    saved = {key: dict(cache.get(key) or {}) for key in ('campaigns', 'adsets', 'ads', 'creatives')}
+
+    def save(key=None, items=None):
+        if key:
+            saved[key].update(items)
+        if cache_path:
+            os.makedirs(os.path.dirname(os.path.abspath(cache_path)), exist_ok=True)
+            # Written whole and then swapped in, so a run stopped mid-write leaves the last good copy.
+            with open(cache_path + '.tmp', 'w') as f:
+                json.dump(dict(saved, saved_at=now.strftime('%Y-%m-%dT%H:%M:%SZ')), f, separators=(',', ':'))
+            os.replace(cache_path + '.tmp', cache_path)
     stale = lambda kept, ids, level: [i for i in ids if i not in kept or i in recent[level]]
 
     statuses = json.dumps(['ACTIVE', 'PAUSED', 'ARCHIVED', 'IN_PROCESS', 'WITH_ISSUES'])
@@ -371,6 +384,7 @@ def main():
     for cid in owner:
         campaigns.setdefault(cid, {'a': owner[cid], 'n': names['campaign'].get(cid) or cid, 'o': None, 's': None, 'st': None})
     log('  %d campaigns' % len(campaigns))
+    save('campaigns', campaigns)
 
     kept = cache.get('adsets') or {}
     asked = stale(kept, names['adset'].keys(), 'adset')
@@ -385,6 +399,7 @@ def main():
         else:
             adsets[sid] = kept.get(sid) or {'c': parent[sid]['c'], 'n': name, 'st': None, 'g': None, 't': None}
     log('  %d ad sets (%d read from Meta)' % (len(adsets), len(asked)))
+    save('adsets', {k: v for k, v in adsets.items() if k in got or k in kept})
 
     kept = cache.get('ads') or {}
     asked = stale(kept, names['ad'].keys(), 'ad')
@@ -398,21 +413,21 @@ def main():
         else:
             ads[aid] = kept.get(aid) or {'c': parent[aid]['c'], 'as': parent[aid]['as'], 'n': name, 'cr': None, 'st': None}
     log('  %d ads (%d read from Meta)' % (len(ads), len(asked)))
+    save('ads', {k: v for k, v in ads.items() if k in got or k in kept})
 
     # A creative's text doesn't change once it runs, so only new ones are read.
     kept = cache.get('creatives') or {}
     wanted = {a['cr'] for a in ads.values() if a.get('cr')}
     asked = [cid for cid in wanted if cid not in kept]
     creatives = {cid: kept[cid] for cid in wanted if cid in kept}
-    creatives.update({cid: creative_text(c) for cid, c in by_ids(asked,
-                      'id,object_type,title,body,call_to_action_type,effective_object_story_id,video_id,object_story_spec,asset_feed_spec').items()})
+    for i in range(0, len(asked), 400):
+        read = {cid: creative_text(c) for cid, c in by_ids(asked[i:i + 400],
+                'id,object_type,title,body,call_to_action_type,effective_object_story_id,video_id,object_story_spec,asset_feed_spec').items()}
+        creatives.update(read)
+        save('creatives', read)
     log('  %d creatives (%d read from Meta)' % (len(creatives), len(asked)))
 
-    if cache_path:
-        os.makedirs(os.path.dirname(os.path.abspath(cache_path)), exist_ok=True)
-        with open(cache_path, 'w') as f:
-            json.dump({'saved_at': now.strftime('%Y-%m-%dT%H:%M:%SZ'), 'campaigns': campaigns, 'adsets': adsets, 'ads': ads, 'creatives': creatives},
-                      f, separators=(',', ':'))
+    save()
 
     # ---- Account totals per day and per month, for the overview chart ----
     account_days, account_months = {}, {}
