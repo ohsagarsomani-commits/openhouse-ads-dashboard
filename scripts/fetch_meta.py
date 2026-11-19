@@ -168,25 +168,27 @@ def slim_targeting(t):
     """Keeps the parts of an ad set's targeting the dashboard turns into its audience line."""
     if not isinstance(t, dict):
         return None
+    # Meta mixes shapes here (lists of objects, of IDs, or single values), so only named objects are kept.
+    items = lambda v: [x for x in v if isinstance(x, dict)] if isinstance(v, list) else []
     out = {k: t[k] for k in ('genders', 'age_min', 'age_max', 'age_range', 'facebook_positions', 'instagram_positions') if k in t}
-    geo = t.get('geo_locations') or {}
+    geo = t.get('geo_locations') if isinstance(t.get('geo_locations'), dict) else {}
     g = {}
     for k in ('custom_locations', 'places'):
-        if geo.get(k):
-            g[k] = [{'name': x.get('name'), 'radius': x.get('radius'), 'distance_unit': x.get('distance_unit')} for x in geo[k]]
+        if items(geo.get(k)):
+            g[k] = [{'name': x.get('name'), 'radius': x.get('radius'), 'distance_unit': x.get('distance_unit')} for x in items(geo.get(k))]
     for k in ('cities', 'regions'):
-        if geo.get(k):
-            g[k] = [{'name': x.get('name')} for x in geo[k]]
-    if geo.get('countries'):
+        if items(geo.get(k)):
+            g[k] = [{'name': x.get('name')} for x in items(geo.get(k))]
+    if isinstance(geo.get('countries'), list) and geo['countries']:
         g['countries'] = geo['countries']
     if g:
         out['geo_locations'] = g
     for k in ('custom_audiences', 'excluded_custom_audiences'):
-        if t.get(k):
-            out[k] = [{kk: x[kk] for kk in ('name', 'subtype', 'lookalike_spec') if kk in x} for x in t[k]]
-    if t.get('flexible_spec'):
-        out['flexible_spec'] = [{k: [{'name': x.get('name')} for x in v] for k, v in grp.items() if isinstance(v, list)}
-                                for grp in t['flexible_spec']]
+        if items(t.get(k)):
+            out[k] = [{kk: x[kk] for kk in ('name', 'subtype', 'lookalike_spec') if kk in x} for x in items(t.get(k))]
+    groups = [grp for grp in t.get('flexible_spec') or [] if isinstance(grp, dict)] if isinstance(t.get('flexible_spec'), list) else []
+    if groups:
+        out['flexible_spec'] = [{k: [{'name': x.get('name')} for x in items(v)] for k, v in grp.items() if items(v)} for grp in groups]
     auto = t.get('targeting_automation')
     if isinstance(auto, dict) and 'advantage_audience' in auto:
         out['targeting_automation'] = {'advantage_audience': auto['advantage_audience']}
@@ -195,13 +197,15 @@ def slim_targeting(t):
 
 def creative_text(c):
     """Headline, primary text, button and carousel cards, wherever this kind of creative keeps them."""
-    spec = c.get('object_story_spec') or {}
-    link = spec.get('link_data') or {}
-    video = spec.get('video_data') or {}
-    feed = c.get('asset_feed_spec') or {}
-    first = lambda items: (items or [{}])[0].get('text') if items else None
-    cta = c.get('call_to_action_type') or (link.get('call_to_action') or {}).get('type') or (video.get('call_to_action') or {}).get('type') \
-        or ((feed.get('call_to_action_types') or [None])[0])
+    obj = lambda v: v if isinstance(v, dict) else {}
+    spec = obj(c.get('object_story_spec'))
+    link = obj(spec.get('link_data'))
+    video = obj(spec.get('video_data'))
+    feed = obj(c.get('asset_feed_spec'))
+    first = lambda v: obj(v[0]).get('text') if isinstance(v, list) and v else None
+    ctas = feed.get('call_to_action_types') if isinstance(feed.get('call_to_action_types'), list) else []
+    cta = c.get('call_to_action_type') or obj(link.get('call_to_action')).get('type') or obj(video.get('call_to_action')).get('type') \
+        or (ctas[0] if ctas else None)
     return {
         'object_type': c.get('object_type'),
         'title': c.get('title') or link.get('name') or video.get('title') or first(feed.get('titles')),
@@ -209,7 +213,7 @@ def creative_text(c):
         'call_to_action_type': cta,
         'effective_object_story_id': c.get('effective_object_story_id'),
         'video_id': c.get('video_id') or video.get('video_id'),
-        'child_attachments': [{'name': k.get('name')} for k in link.get('child_attachments') or []],
+        'child_attachments': [{'name': k.get('name')} for k in link.get('child_attachments') or [] if isinstance(k, dict)],
     }
 
 
