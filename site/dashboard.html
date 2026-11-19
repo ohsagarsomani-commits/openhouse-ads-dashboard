@@ -415,7 +415,7 @@ dash.loader('ad_preview', {
 
 // The At-Home bookings sheet: only its booking columns (A–F) and link-tag columns (X–Z) are read. The columns between hold parents' details and are never asked for.
 dash.loader('athome_bookings', {
-  description: 'Lines up the At-Home bookings sheet’s booking columns (A–F) with its link-tag columns (X–Z), row by row, and reads each booking’s day and amount in rupees including GST.',
+  description: 'Lines up the At-Home bookings sheet’s booking columns (A–F) with its link-tag columns (X–AB: source, medium, campaign, ad, ad set), row by row, and reads each booking’s day and amount in rupees including GST.',
   fn: ({ answer }) => {
     if (answer && answer.error) throw new Error(typeof answer.error === 'string' ? answer.error : (answer.error.message || 'Google Sheets returned an error.'));
     const sheets = ((answer && answer.content) || answer || {}).sheets;
@@ -434,11 +434,12 @@ dash.loader('athome_bookings', {
     for (let i = 1; i < main.length; i++) {
       const [ref, bookedAt, status, subject, plan, total] = main[i];
       if (!ref) continue;
-      const [source, medium, campaign] = tags[i] || [];
+      const [source, medium, campaign, content, term] = tags[i] || [];
       const amount = Number(String(total || '').replace(/[^0-9.]/g, ''));
       rows.push({
         booking_ref: ref, booked_on: dayOf(bookedAt), status: status || null, subject: subject || null, plan: plan || null,
         amount: Number.isFinite(amount) ? amount : 0, utm_source: source || null, utm_medium: medium || null, utm_campaign: campaign || null,
+        utm_content: content || null, utm_term: term || null,
       });
     }
     return rows;
@@ -608,6 +609,29 @@ dash.calc('campaigns_meta', {
   },
 });
 
+// The At-Home bookings sheet is the record of At-Home bookings. Each booking belongs to the Meta campaign its link tags name,
+// by ID or by name. One without tags belongs to the campaign of the nearest tagged booking before it (or after it): the booking
+// page can only be reached from the At-Home ads. Cancelled, refunded or failed bookings would be left out.
+const normTag = (s) => String(s || '').replace(/\+/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().toLowerCase();
+const sheetBookings = (bookings, programs) => {
+  const ids = new Set(programs.map((p) => p.id));
+  const byName = {};
+  for (const p of programs) byName[normTag(p.meta_name)] = p.id;
+  const campaignOf = (b) => {
+    const tag = String(b.utm_campaign || '').trim();
+    return /^\d+$/.test(tag) && ids.has(tag) ? tag : byName[normTag(tag)] || null;
+  };
+  // In the sheet's own order, which is the order the bookings were made.
+  const counted = bookings.filter((b) => !/cancel|refund|fail/i.test(b.status || ''));
+  const tagged = counted.map(campaignOf);
+  return counted.map((b, i) => {
+    let id = tagged[i];
+    for (let j = i - 1; !id && j >= 0; j--) id = tagged[j];
+    for (let j = i + 1; !id && j < counted.length; j++) id = tagged[j];
+    return { ...b, campaign_id: id, untagged: !tagged[i] };
+  }).filter((b) => b.campaign_id);
+};
+
 // The At-Home campaign's bookings land in its own Google Sheet, which Meta doesn't see: they replace Meta's purchases for that campaign.
 dash.calc('sheet_sales', {
   inputs: ['athome_bookings', 'programs'],
@@ -615,31 +639,75 @@ dash.calc('sheet_sales', {
   description: 'Every booking in the At-Home bookings sheet is a paid booking from the At-Home Meta ads: the booking page can only be reached from them. Each counts once, in the chosen period, with its amount including GST, for the Meta campaign its link tags name (by ID or by name). One without tags counts for the campaign of the nearest booking before it that has them. Cancelled, refunded or failed bookings would be left out.',
   fn: (bookings, programs) => {
     const { since, until } = dash.params();
-    const norm = (s) => String(s || '').replace(/\+/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().toLowerCase();
-    const ids = new Set(programs.map((p) => p.id));
-    const byName = {};
-    for (const p of programs) byName[norm(p.meta_name)] = p.id;
-    const campaignOf = (b) => {
-      const tag = String(b.utm_campaign || '').trim();
-      return /^\d+$/.test(tag) && ids.has(tag) ? tag : byName[norm(tag)] || null;
-    };
-    // Bookings in the sheet's own order, which is the order they were made.
-    const counted = bookings.filter((b) => !/cancel|refund|fail/i.test(b.status || ''));
-    const tagged = counted.map(campaignOf);
     const out = {};
-    counted.forEach((b, i) => {
-      let id = tagged[i];
-      const untagged = !id;
-      for (let j = i - 1; !id && j >= 0; j--) id = tagged[j];
-      for (let j = i + 1; !id && j < counted.length; j++) id = tagged[j];
-      if (!id) return;
-      const row = out[id] || (out[id] = { id, purchases: 0, sales: 0, untagged_bookings: 0 });
-      if (!(b.booked_on && b.booked_on >= since && b.booked_on <= until)) return;
+    for (const b of sheetBookings(bookings, programs)) {
+      const row = out[b.campaign_id] || (out[b.campaign_id] = { id: b.campaign_id, purchases: 0, sales: 0, untagged_bookings: 0 });
+      if (!(b.booked_on && b.booked_on >= since && b.booked_on <= until)) continue;
       row.purchases += 1;
-      if (untagged) row.untagged_bookings += 1;
+      if (b.untagged) row.untagged_bookings += 1;
       row.sales = Math.round((row.sales + (b.amount || 0)) * 100) / 100;
-    });
+    }
     return Object.values(out);
+  },
+});
+
+dash.calc('sheet_days', {
+  inputs: ['athome_bookings', 'programs'],
+  title: 'At-Home bookings by day',
+  description: 'The At-Home bookings sheet’s bookings counted for each day and Meta campaign, with their amounts including GST. The spend charts show them as that day’s purchases for the At-Home campaign.',
+  fn: (bookings, programs) => {
+    const accountOf = {};
+    for (const p of programs) accountOf[p.id] = p.account_id;
+    const out = {};
+    for (const b of sheetBookings(bookings, programs)) {
+      if (!b.booked_on) continue;
+      const key = b.campaign_id + '|' + b.booked_on;
+      const row = out[key] || (out[key] = { key, campaign_id: b.campaign_id, account: accountOf[b.campaign_id] || null, date: b.booked_on, bookings: 0, sales: 0 });
+      row.bookings += 1;
+      row.sales = Math.round((row.sales + (b.amount || 0)) * 100) / 100;
+    }
+    return Object.values(out).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  },
+});
+
+dash.calc('sheet_drill', {
+  inputs: ['athome_bookings', 'programs', 'adsets', 'ads'],
+  title: 'At-Home bookings by ad set and ad',
+  description: 'For the open campaign, its At-Home bookings in the chosen period by the ad set and ad their link tags name: the ad set by utm_term, the ad by utm_content within that ad set, each by ID or by name. Cost per purchase is spend ÷ bookings and ROAS is the bookings’ amounts including GST ÷ spend. Bookings whose tags name no ad set or ad are counted on the campaign row.',
+  fn: (bookings, programs, adsets, ads) => {
+    const { since, until, campaign } = dash.params();
+    const round = (v) => Math.round(v * 100) / 100;
+    const sets = adsets.filter((a) => a.campaign_id === campaign);
+    const theirAds = ads.filter((a) => a.campaign_id === campaign);
+    const find = (list, tag) => {
+      const t = String(tag || '').trim();
+      if (!t) return null;
+      return list.find((x) => x.id === t) || list.find((x) => normTag(x.name) === normTag(t)) || null;
+    };
+    const out = {};
+    const add = (level, id, spend, amount) => {
+      const row = out[id] || (out[id] = { level, id, purchases: 0, sales: 0, spend: spend || 0 });
+      row.purchases += 1;
+      row.sales = round(row.sales + (amount || 0));
+    };
+    const total = { level: 'campaign', id: campaign || '', purchases: 0, sales: 0, no_adset: 0, no_ad: 0 };
+    for (const b of sheetBookings(bookings, programs)) {
+      if (b.campaign_id !== campaign || !(b.booked_on && b.booked_on >= since && b.booked_on <= until)) continue;
+      total.purchases += 1;
+      total.sales = round(total.sales + (b.amount || 0));
+      const set = find(sets, b.utm_term);
+      // Ad names repeat across ad sets, so an ad is found within its ad set; an ad ID alone is enough.
+      const ad = find(theirAds.filter((a) => !set || a.adset_id === set.id), b.utm_content);
+      const adSet = set || (ad && sets.find((x) => x.id === ad.adset_id)) || null;
+      if (adSet) add('adset', adSet.id, adSet.amount_spent, b.amount); else total.no_adset += 1;
+      if (ad) add('ad', ad.id, ad.amount_spent, b.amount); else total.no_ad += 1;
+    }
+    const rows = Object.values(out).map((r) => ({
+      ...r,
+      cost_per_purchase: r.purchases > 0 && r.spend > 0 ? round(r.spend / r.purchases) : null,
+      roas: r.spend > 0 ? round(r.sales / r.spend) : null,
+    }));
+    return [total, ...rows];
   },
 });
 
@@ -950,6 +1018,8 @@ dash.calc('audiences', {
 const ACCOUNT_PURPOSES = { [HIRING_ACCOUNT]: 'Hiring', [SALES_ACCOUNT]: 'Sales' };
 const purposeColor = (purpose) => (purpose === 'Hiring' ? dash.colors[1] : purpose === 'Ticket sales' ? dash.colors[0] : purpose === 'Enquiries' ? dash.colors[2] : null);
 const REFRESH_EVERY_MS = 2 * 60 * 60 * 1000;
+// The At-Home bookings sheet changes all day, so it is read again more often.
+const SHEET_EVERY_MS = 5 * 60 * 1000;
 
 const PERIODS = {
   campaign: 'Over the whole campaign', today: 'Today', yesterday: 'Yesterday', last_7d: 'In the last 7 days', last_14d: 'In the last 14 days',
@@ -1115,6 +1185,25 @@ const purposeCell = (r) => {
   return td;
 };
 
+// The open campaign's ad sets and ads take their purchases from the At-Home bookings sheet when the campaign's do.
+const SHEET_FIELDS = { omni_purchase: 'purchases', cost_per_omni_purchase: 'cost_per_purchase', ticket_sales: 'sales', ticket_roas: 'roas' };
+const sheetDrill = () => {
+  const c = selectedCampaign();
+  if (!c || c.purchases_from !== 'At-Home bookings sheet') return null;
+  const d = dash.data('sheet_drill');
+  return d.status === 'ok' ? d : null;
+};
+const withSheet = (rows, level) => {
+  const d = sheetDrill();
+  if (!d) return rows;
+  const byId = {};
+  for (const x of d.data || []) if (x.level === level) byId[x.id] = x;
+  return rows.map((r) => {
+    const x = byId[r.id] || { purchases: 0, sales: 0, cost_per_purchase: null, roas: (r.amount_spent || 0) > 0 ? 0 : null };
+    return { ...r, meta_purchases: r.omni_purchase, omni_purchase: x.purchases, cost_per_omni_purchase: x.cost_per_purchase, ticket_sales: x.sales, ticket_roas: x.roas, from_sheet: true };
+  });
+};
+
 const buildRow = (r, subText, onPick, selected, showPurpose, extra) => {
   const tr = document.createElement('tr');
   tr.dataset.key = r.id;
@@ -1141,6 +1230,12 @@ const buildRow = (r, subText, onPick, selected, showPurpose, extra) => {
     const td = document.createElement('td');
     if (r[k] == null) td.className = 'oh-dim';
     td.textContent = FORMATS[FIELD_FORMAT[k]](r[k]);
+    // A number from the bookings sheet points to it rather than to Meta's row.
+    if (r.from_sheet && SHEET_FIELDS[k]) {
+      td.dataset.source = 'sheet_drill';
+      td.dataset.field = SHEET_FIELDS[k];
+      td.dataset.where = 'id=' + r.id;
+    }
     return td;
   });
   tr.append(first, ...(showPurpose ? [purposeCell(r)] : []), statusCell, ...metricCells);
@@ -1314,7 +1409,7 @@ dash.draw('acct-select', (sel) => {
 });
 
 dash.draw('refresh-status', {
-  mount: () => ({ timer: setInterval(refreshAll, REFRESH_EVERY_MS) }),
+  mount: () => ({ timer: setInterval(refreshAll, REFRESH_EVERY_MS), sheetTimer: setInterval(() => dash.refresh('athome_bookings'), SHEET_EVERY_MS) }),
   update: (el) => {
     const busy = [...CAMPAIGN_SOURCES, ...trendSources(dash.params())].some((id) => {
       const s = dash.data(id);
@@ -1323,7 +1418,7 @@ dash.draw('refresh-status', {
     el.textContent = busy ? 'Getting the latest numbers from Meta…' : 'Refreshes on its own every 2 hours';
     for (const btn of document.querySelectorAll('#oh-refresh')) btn.disabled = busy;
   },
-  unmount: (el, made) => clearInterval(made.timer),
+  unmount: (el, made) => { clearInterval(made.timer); clearInterval(made.sheetTimer); },
 });
 
 // ---- Overview ----
@@ -1406,6 +1501,28 @@ dash.draw('trend', {
       .attr('x', (r) => x(r.date) + x.bandwidth() / 2).attr('y', height - 8).attr('text-anchor', 'middle')
       .text((r) => dayText(asDate(r.date)));
 
+    // At-Home bookings per bar, from the sheet. Where every campaign in the chart is a sheet campaign they are its purchases;
+    // otherwise they show beside Meta's purchases, which never include them.
+    const sheetDays = dash.data('sheet_days');
+    const sheetSales = dash.data('sheet_sales');
+    const p = dash.params();
+    const sheetIds = new Set(sheetSales.status === 'ok' ? (sheetSales.data || []).map((x) => x.id) : []);
+    const inGroup = grouped ? (p.gids || []).map(String) : null;
+    const onlySheet = Boolean(inGroup && inGroup.length && inGroup.every((id) => sheetIds.has(id)));
+    const bucketOf = (date) => {
+      if (step === 'monthly') return date.slice(0, 8) + '01' < p.since ? p.since : date.slice(0, 8) + '01';
+      if (step === '7') return d3.utcFormat('%Y-%m-%d')(d3.utcDay.offset(asDate(p.since), Math.floor(d3.utcDay.count(asDate(p.since), asDate(date)) / 7) * 7));
+      return date;
+    };
+    const booked = {};
+    if (sheetDays.status === 'ok') {
+      for (const x of sheetDays.data || []) {
+        if (x.date < p.since || x.date > p.until || (acct !== 'all' && x.account !== acct) || (inGroup && !inGroup.includes(x.campaign_id))) continue;
+        const k = bucketOf(x.date);
+        booked[k] = (booked[k] || 0) + x.bookings;
+      }
+    }
+
     const show = (r) => {
       bars.classed('is-hover', (b) => b === r);
       const node = tip.node();
@@ -1413,7 +1530,10 @@ dash.draw('trend', {
       const head = document.createElement('strong');
       head.textContent = d3.utcFormat({ '7': 'Week of %-d %b', monthly: '%B %Y' }[step] || '%a %-d %b')(asDate(r.date)) + ' · ' + FORMATS.money(r.spend);
       node.append(head);
-      for (const [label, value] of [['Leads', r.leads], ['Purchases', r.purchases], ['Link clicks', r.link_clicks], ['Impressions', r.impressions]]) {
+      const lines = [['Leads', r.leads], ['Purchases', onlySheet ? booked[r.date] || 0 : r.purchases]];
+      if (!onlySheet && booked[r.date]) lines.push(['At-Home bookings', booked[r.date]]);
+      lines.push(['Link clicks', r.link_clicks], ['Impressions', r.impressions]);
+      for (const [label, value] of lines) {
         const line = document.createElement('span');
         line.textContent = label + ': ' + FORMATS.count(value);
         node.append(line);
@@ -1543,7 +1663,7 @@ dash.draw('adset-rows', (tbody) => {
   const d = dash.data('adsets');
   if (d.status !== 'ok') { tbody.replaceChildren(); return; }
   const p = dash.params();
-  const rows = sortRows(withTickets((d.data || []).filter((r) => r.campaign_id === p.campaign), 'adset_tickets'), 'amount_spent:desc');
+  const rows = sortRows(withSheet(withTickets((d.data || []).filter((r) => r.campaign_id === p.campaign), 'adset_tickets'), 'adset'), 'amount_spent:desc');
   const aud = dash.data('audiences');
   const audienceOf = {};
   if (aud.status === 'ok') for (const a of aud.data || []) audienceOf[a.id] = a.audience;
@@ -1564,7 +1684,13 @@ dash.draw('adset-note', (el) => {
   if (d.status === 'loading' || d.refreshing) { el.textContent = 'Loading ad sets from Meta…'; return; }
   if (d.status === 'error') { el.textContent = 'Failed to load'; return; }
   if (d.status !== 'ok') { el.textContent = ''; return; }
-  el.textContent = (d.data || []).some((r) => r.campaign_id === p.campaign) ? '' : 'No ad sets in this campaign.';
+  if (!(d.data || []).some((r) => r.campaign_id === p.campaign)) { el.textContent = 'No ad sets in this campaign.'; return; }
+  const s = sheetDrill();
+  const total = s && (s.data || []).find((x) => x.level === 'campaign');
+  if (!total) { el.textContent = ''; return; }
+  const parts = [document.createTextNode('Purchases here are bookings from the At-Home bookings sheet, by the ad set their link tags name.')];
+  if (total.no_adset > 0) parts.push(document.createTextNode(' '), markedValue('sheet_drill', 'no_adset', 'id=' + total.id, FORMATS.count(total.no_adset)), document.createTextNode(' of this period’s ' + FORMATS.count(total.purchases) + ' bookings name no ad set, so they count only for the campaign.'));
+  el.replaceChildren(...parts);
 });
 
 dash.draw('ads-scope', (el) => {
@@ -1617,7 +1743,10 @@ const creativeCard = (ad, c) => {
   const result = (ad.omni_purchase || 0) > 0 ? ['omni_purchase', ' purchases']
     : (ad.lead || 0) > 0 ? ['lead', ' leads']
       : (ad.link_click || 0) > 0 ? ['link_click', ' link clicks'] : null;
-  if (result) stats.append(document.createTextNode(' · '), markedValue('ads', result[0], 'id=' + ad.id, FORMATS.count(ad[result[0]])), document.createTextNode(result[1]));
+  if (result) {
+    const fromSheet = ad.from_sheet && result[0] === 'omni_purchase';
+    stats.append(document.createTextNode(' · '), markedValue(fromSheet ? 'sheet_drill' : 'ads', fromSheet ? 'purchases' : result[0], 'id=' + ad.id, FORMATS.count(ad[result[0]])), document.createTextNode(fromSheet ? ' bookings' : result[1]));
+  }
   card.append(stats);
 
   if (c) {
@@ -1663,7 +1792,7 @@ dash.draw('creative-cards', (el) => {
   if (ads.status !== 'ok' || creatives.status !== 'ok') { el.replaceChildren(); return; }
   const byId = {};
   for (const c of creatives.data || []) byId[c.id] = c;
-  const rows = sortRows((ads.data || []).filter((r) => r.campaign_id === p.campaign && (!p.adset || r.adset_id === p.adset)), 'amount_spent:desc');
+  const rows = sortRows(withSheet((ads.data || []).filter((r) => r.campaign_id === p.campaign && (!p.adset || r.adset_id === p.adset)), 'ad'), 'amount_spent:desc');
   el.replaceChildren(...rows.map((r) => creativeCard(r, byId[r.creative_id])));
 });
 
@@ -1710,7 +1839,7 @@ dash.draw('ad-rows', (tbody) => {
   const d = dash.data('ads');
   if (d.status !== 'ok') { tbody.replaceChildren(); return; }
   const p = dash.params();
-  const rows = sortRows(withTickets((d.data || []).filter((r) => r.campaign_id === p.campaign && (!p.adset || r.adset_id === p.adset)), 'ad_tickets'), 'amount_spent:desc');
+  const rows = sortRows(withSheet(withTickets((d.data || []).filter((r) => r.campaign_id === p.campaign && (!p.adset || r.adset_id === p.adset)), 'ad_tickets'), 'ad'), 'amount_spent:desc');
   tbody.replaceChildren(...rows.map((r) => buildRow(r, r.adset_name ? 'Ad set: ' + r.adset_name : '', null, false)));
 });
 
@@ -1721,7 +1850,13 @@ dash.draw('ad-note', (el) => {
   if (d.status === 'error') { el.textContent = 'Failed to load'; return; }
   if (d.status !== 'ok') { el.textContent = ''; return; }
   const n = (d.data || []).filter((r) => r.campaign_id === p.campaign && (!p.adset || r.adset_id === p.adset)).length;
-  el.textContent = n ? '' : 'No ads to show here.';
+  if (!n) { el.textContent = 'No ads to show here.'; return; }
+  const s = sheetDrill();
+  const total = s && (s.data || []).find((x) => x.level === 'campaign');
+  if (!total) { el.textContent = ''; return; }
+  const parts = [document.createTextNode('Purchases here are bookings from the At-Home bookings sheet, by the ad their link tags name within its ad set.')];
+  if (total.no_ad > 0) parts.push(document.createTextNode(' '), markedValue('sheet_drill', 'no_ad', 'id=' + total.id, FORMATS.count(total.no_ad)), document.createTextNode(' of this period’s ' + FORMATS.count(total.purchases) + ' bookings name no ad, so they count only for the campaign.'));
+  el.replaceChildren(...parts);
 });
 
 // ---- Views, controls and loading states ----

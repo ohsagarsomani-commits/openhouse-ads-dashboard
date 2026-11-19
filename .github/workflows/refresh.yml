@@ -46,6 +46,26 @@ jobs:
         with:
           node-version: '22'
 
+      # Names, statuses, audiences and ad text from the last run, so only new and recently active items are read
+      # from Meta again. The cache is encrypted with the page password.
+      - name: Restore what the last run read
+        if: steps.token.outputs.ready == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: cache/meta.enc
+          key: meta-${{ github.run_id }}
+          restore-keys: meta-
+
+      - name: Unlock it
+        if: steps.token.outputs.ready == 'true'
+        env:
+          PAGE_PASSWORD: ${{ secrets.PAGE_PASSWORD }}
+        run: |
+          mkdir -p data cache
+          if [ -f cache/meta.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:PAGE_PASSWORD -in cache/meta.enc -out data/meta-cache.json || rm -f data/meta-cache.json
+          fi
+
       # Meta sometimes turns requests down for a while. Then this run keeps the last page and stops quietly;
       # the last step fails (and GitHub emails) only when the page has gone 12 hours without an update.
       - name: Pull the numbers from Meta
@@ -56,12 +76,26 @@ jobs:
         env:
           META_TOKEN: ${{ secrets.META_TOKEN }}
           ATHOME_SHEET_CSV_URL: ${{ secrets.ATHOME_SHEET_CSV_URL }}
-        run: python3 scripts/fetch_meta.py --out data/snapshot.json
+        run: python3 scripts/fetch_meta.py --out data/snapshot.json --cache data/meta-cache.json
+
+      - name: Lock what this run read
+        if: steps.token.outputs.ready == 'true' && steps.fetch.outcome == 'success'
+        env:
+          PAGE_PASSWORD: ${{ secrets.PAGE_PASSWORD }}
+        run: openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PAGE_PASSWORD -in data/meta-cache.json -out cache/meta.enc
+
+      - name: Keep it for the next run
+        if: steps.token.outputs.ready == 'true' && steps.fetch.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: cache/meta.enc
+          key: meta-${{ github.run_id }}
 
       - name: Lock the page with the password
         if: steps.token.outputs.ready == 'true' && steps.fetch.outcome == 'success'
         env:
           PAGE_PASSWORD: ${{ secrets.PAGE_PASSWORD }}
+          ATHOME_SHEET_CSV_URL: ${{ secrets.ATHOME_SHEET_CSV_URL }}
         run: node scripts/build.mjs --data data/snapshot.json --out out
 
       - name: Publish to the gh-pages branch

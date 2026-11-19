@@ -62,8 +62,18 @@ def call(path, params=None, method='GET', tries=6):
             except ValueError:
                 err = {}
             transient = err.get('is_transient') or err.get('code') in (1, 2, 4, 17, 32, 341, 613, 80000, 80004) or e.code >= 500
+            # When Meta limits calls to an ad account it says how many minutes until it accepts them again.
+            wait = 0
+            try:
+                for entries in json.loads(e.headers.get('x-business-use-case-usage') or '{}').values():
+                    for entry in entries:
+                        wait = max(wait, int(entry.get('estimated_time_to_regain_access') or 0))
+            except (ValueError, AttributeError, TypeError):
+                wait = 0
+            if wait > 10:
+                raise RuntimeError('Meta asks to wait %d minutes before more calls to this ad account.' % wait)
             if transient and attempt < tries - 1:
-                time.sleep(min(90, 5 * 2 ** attempt))
+                time.sleep(wait * 60 + 15 if wait else min(90, 5 * 2 ** attempt))
                 continue
             # The message never includes the URL, which carries the token.
             raise RuntimeError('Meta refused %s: %s (code %s)' % (path.split('?')[0][:80], err.get('message', 'HTTP %s' % e.code), err.get('code')))
@@ -240,7 +250,7 @@ def creative_text(c):
 
 def athome_sheet():
     """The At-Home bookings, from a published CSV of the sheet's non-personal columns (ATHOME_SHEET_CSV_URL):
-    Booking ref, Booked at, Status, Subject, Plan, Total, utm_source, utm_medium, utm_campaign.
+    Booking ref, Booked at, Status, Subject, Plan, Total, utm_source, utm_medium, utm_campaign, utm_content, utm_term.
     Shaped like the Google Sheets answer the dashboard page reads. Without the URL the page shows Meta's count."""
     url = os.environ.get('ATHOME_SHEET_CSV_URL', '').strip()
     if not url:
@@ -256,7 +266,7 @@ def athome_sheet():
     log('  At-Home sheet     %d bookings' % (len(rows) - 1))
     return {'content': {'sheets': [{'data': [
         {'rowData': [line(r[:6]) for r in rows]},
-        {'startColumn': 23, 'rowData': [line(r[6:9]) for r in rows]},
+        {'startColumn': 23, 'rowData': [line(r[6:11]) for r in rows]},
     ]}]}}
 
 
@@ -265,7 +275,9 @@ def athome_sheet():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', default='data/snapshot.json')
-    out_path = parser.parse_args().out
+    parser.add_argument('--cache', default=None, help='names, statuses, audiences and ad text kept between runs')
+    opts = parser.parse_args()
+    out_path, cache_path = opts.out, opts.cache
     if not TOKEN:
         sys.exit('Set META_TOKEN to a token with ads_read on the Openhouse ad accounts.')
 
@@ -337,8 +349,19 @@ def main():
             totals[level][preset].append([oid] + measures(r))
 
     # ---- Names, statuses, audiences and ad text ----
+    # Kept between runs in --cache: only new items, and those that ran in the last 30 days, are read from Meta again.
+    cache = {}
+    if cache_path and os.path.exists(cache_path):
+        try:
+            with open(cache_path) as f:
+                cache = json.load(f)
+        except ValueError:
+            cache = {}
+    recent = {level: {t[0] for t in totals[level]['last_30d']} for level in ('adset', 'ad')}
+    stale = lambda kept, ids, level: [i for i in ids if i not in kept or i in recent[level]]
+
     statuses = json.dumps(['ACTIVE', 'PAUSED', 'ARCHIVED', 'IN_PROCESS', 'WITH_ISSUES'])
-    campaigns = {}
+    campaigns = dict(cache.get('campaigns') or {})
     for account in ACCOUNTS:
         for c in pages('act_%s/campaigns' % account, {'fields': 'id,name,objective,start_time,effective_status', 'effective_status': statuses, 'limit': 500}):
             campaigns[c['id']] = {'a': account, 'n': c.get('name'), 'o': c.get('objective'), 's': c.get('start_time'), 'st': c.get('effective_status')}
@@ -349,26 +372,47 @@ def main():
         campaigns.setdefault(cid, {'a': owner[cid], 'n': names['campaign'].get(cid) or cid, 'o': None, 's': None, 'st': None})
     log('  %d campaigns' % len(campaigns))
 
+    kept = cache.get('adsets') or {}
+    asked = stale(kept, names['adset'].keys(), 'adset')
+    got = by_ids(asked, 'id,name,campaign_id,effective_status,optimization_goal,targeting')
     adsets = {}
-    got = by_ids(names['adset'].keys(), 'id,name,campaign_id,effective_status,optimization_goal,targeting')
     for sid, name in names['adset'].items():
-        a = got.get(sid, {})
-        t = slim_targeting(a.get('targeting'))
-        adsets[sid] = {'c': a.get('campaign_id') or parent[sid]['c'], 'n': a.get('name') or name, 'st': a.get('effective_status'),
-                       'g': a.get('optimization_goal'), 't': json.dumps(t, separators=(',', ':')) if t else None}
-    log('  %d ad sets' % len(adsets))
+        if sid in got:
+            a = got[sid]
+            t = slim_targeting(a.get('targeting'))
+            adsets[sid] = {'c': a.get('campaign_id') or parent[sid]['c'], 'n': a.get('name') or name, 'st': a.get('effective_status'),
+                           'g': a.get('optimization_goal'), 't': json.dumps(t, separators=(',', ':')) if t else None}
+        else:
+            adsets[sid] = kept.get(sid) or {'c': parent[sid]['c'], 'n': name, 'st': None, 'g': None, 't': None}
+    log('  %d ad sets (%d read from Meta)' % (len(adsets), len(asked)))
 
+    kept = cache.get('ads') or {}
+    asked = stale(kept, names['ad'].keys(), 'ad')
+    got = by_ids(asked, 'id,name,adset_id,campaign_id,effective_status,creative{id}')
     ads = {}
-    got = by_ids(names['ad'].keys(), 'id,name,adset_id,campaign_id,effective_status,creative{id}')
     for aid, name in names['ad'].items():
-        a = got.get(aid, {})
-        ads[aid] = {'c': a.get('campaign_id') or parent[aid]['c'], 'as': a.get('adset_id') or parent[aid]['as'], 'n': a.get('name') or name,
-                    'cr': (a.get('creative') or {}).get('id'), 'st': a.get('effective_status')}
-    log('  %d ads' % len(ads))
+        if aid in got:
+            a = got[aid]
+            ads[aid] = {'c': a.get('campaign_id') or parent[aid]['c'], 'as': a.get('adset_id') or parent[aid]['as'], 'n': a.get('name') or name,
+                        'cr': (a.get('creative') or {}).get('id'), 'st': a.get('effective_status')}
+        else:
+            ads[aid] = kept.get(aid) or {'c': parent[aid]['c'], 'as': parent[aid]['as'], 'n': name, 'cr': None, 'st': None}
+    log('  %d ads (%d read from Meta)' % (len(ads), len(asked)))
 
-    creatives = {cid: creative_text(c) for cid, c in by_ids([a['cr'] for a in ads.values()],
-                 'id,object_type,title,body,call_to_action_type,effective_object_story_id,video_id,object_story_spec,asset_feed_spec').items()}
-    log('  %d creatives' % len(creatives))
+    # A creative's text doesn't change once it runs, so only new ones are read.
+    kept = cache.get('creatives') or {}
+    wanted = {a['cr'] for a in ads.values() if a.get('cr')}
+    asked = [cid for cid in wanted if cid not in kept]
+    creatives = {cid: kept[cid] for cid in wanted if cid in kept}
+    creatives.update({cid: creative_text(c) for cid, c in by_ids(asked,
+                      'id,object_type,title,body,call_to_action_type,effective_object_story_id,video_id,object_story_spec,asset_feed_spec').items()})
+    log('  %d creatives (%d read from Meta)' % (len(creatives), len(asked)))
+
+    if cache_path:
+        os.makedirs(os.path.dirname(os.path.abspath(cache_path)), exist_ok=True)
+        with open(cache_path, 'w') as f:
+            json.dump({'saved_at': now.strftime('%Y-%m-%dT%H:%M:%SZ'), 'campaigns': campaigns, 'adsets': adsets, 'ads': ads, 'creatives': creatives},
+                      f, separators=(',', ':'))
 
     # ---- Account totals per day and per month, for the overview chart ----
     account_days, account_months = {}, {}

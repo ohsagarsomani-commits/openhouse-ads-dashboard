@@ -328,6 +328,45 @@
     document.documentElement.dataset.ready = '1';
   }
 
+  // The At-Home bookings sheet changes all day. Its published feed (no personal details) is read when the page opens
+  // and every 5 minutes, so At-Home bookings stay current between the 2-hourly Meta updates.
+  const parseCsv = (text) => {
+    const rows = [];
+    let row = [];
+    let cell = '';
+    let quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') quoted = false; else cell += ch;
+      } else if (ch === '"') quoted = true;
+      else if (ch === ',') { row.push(cell); cell = ''; } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); cell = ''; rows.push(row); row = [];
+      } else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  };
+  const feedToSheet = (rows) => {
+    if (!rows.length || rows[0].length < 9) return null;
+    const line = (values) => (values.some((v) => v !== '') ? { values: values.map((v) => ({ formattedValue: v })) } : {});
+    return { content: { sheets: [{ data: [{ rowData: rows.map((r) => line(r.slice(0, 6))) }, { startColumn: 23, rowData: rows.map((r) => line(r.slice(6, 11))) }] }] } };
+  };
+  const readSheetFeed = () => {
+    if (!DATA.athome_csv_url || typeof fetch !== 'function') return;
+    fetch(DATA.athome_csv_url, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.text() : Promise.reject(new Error('HTTP ' + res.status))))
+      .then((text) => {
+        const sheet = feedToSheet(parseCsv(text));
+        if (!sheet) return;
+        DATA.athome_sheet = sheet;
+        delete sig.athome_bookings;
+        schedule();
+      })
+      .catch(() => { /* keep the bookings that came with the page */ });
+  };
+
   let resizeTimer = null;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
@@ -359,6 +398,10 @@
     today: () => DATA.today,
     updatedText: () => 'Numbers from Meta as of ' + IST.format(new Date(DATA.generated_at)) + ' IST'
       + (DATA.coverage && DATA.coverage.note ? ' · ' + DATA.coverage.note : ' · updates every 2 hours'),
-    start: () => schedule(),
+    start: () => {
+      schedule();
+      readSheetFeed();
+      setInterval(readSheetFeed, 5 * 60 * 1000);
+    },
   };
 })();

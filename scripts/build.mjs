@@ -86,6 +86,9 @@ const data = JSON.parse(readFileSync(dataPath, 'utf8'));
 for (const key of ['today', 'generated_at', 'campaigns', 'totals', 'coverage']) {
   if (!(key in data)) throw new Error('The data file has no ' + key + ': ' + dataPath);
 }
+// The page reads the At-Home bookings feed itself as well, so its bookings stay current between refreshes.
+// The link only ever travels inside the locked page.
+if (process.env.ATHOME_SHEET_CSV_URL) data.athome_csv_url = process.env.ATHOME_SHEET_CSV_URL.trim();
 data.lists = {
   campaign_names: parseCsv(readFileSync(join(SITE, 'lists', 'campaign-names.csv'), 'utf8')),
   ticket_prices: parseCsv(readFileSync(join(SITE, 'lists', 'ticket-prices.csv'), 'utf8')),
