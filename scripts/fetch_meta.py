@@ -74,15 +74,15 @@ def call(path, params=None, method='GET', tries=6):
             raise
 
 
-def pages(path, params):
-    page = call(path, params)
+def pages(path, params, tries=6):
+    page = call(path, params, tries=tries)
     while True:
         for row in page.get('data', []):
             yield row
         nxt = (page.get('paging') or {}).get('next')
         if not nxt:
             return
-        page = call(nxt)
+        page = call(nxt, tries=tries)
 
 
 def insights(account, params, label, big=False):
@@ -93,7 +93,7 @@ def insights(account, params, label, big=False):
     body.update(params)
     if not big:
         try:
-            rows = list(pages('act_%s/insights' % account, body))
+            rows = list(pages('act_%s/insights' % account, body, tries=2))
             log('  %-16s %-26s %6d rows' % (ACCOUNTS[account], label, len(rows)))
             return rows
         except RuntimeError:
@@ -274,25 +274,42 @@ def main():
     dates = periods(today)
     log('Pulling Meta numbers up to %s (India time)' % today)
 
-    jobs = []
+    fields = {'campaign': 'campaign_id,campaign_name,spend,impressions,reach,actions',
+              'adset': 'adset_id,adset_name,campaign_id,spend,impressions,reach,actions',
+              'ad': 'ad_id,ad_name,adset_id,campaign_id,spend,impressions,reach,actions'}
+    span = lambda preset: json.dumps({'since': dates[preset][0].isoformat(), 'until': dates[preset][1].isoformat()})
+    job = lambda account, level, preset: (account, level, preset, {'level': level, 'fields': fields[level], 'time_range': span(preset)})
+
+    def run(j):
+        account, level, preset, params = j
+        return j, insights(account, params, level + ' ' + preset, big=preset in ('all_time', 'days'))
+
+    # First each account's campaigns by day and over all time: they show which periods had any spend at all.
+    first = []
     for account in ACCOUNTS:
-        for level, fields in (('campaign', 'campaign_id,campaign_name,spend,impressions,reach,actions'),
-                              ('adset', 'adset_id,adset_name,campaign_id,spend,impressions,reach,actions'),
-                              ('ad', 'ad_id,ad_name,adset_id,campaign_id,spend,impressions,reach,actions')):
-            for preset in PRESETS:
-                since, until = dates[preset]
-                jobs.append((account, level, preset, {'level': level, 'fields': fields,
-                                                      'time_range': json.dumps({'since': since.isoformat(), 'until': until.isoformat()})}))
-        since, until = dates['all_time']
-        jobs.append((account, 'campaign', 'days', {'level': 'campaign', 'fields': 'campaign_id,spend,impressions,actions', 'time_increment': 1,
-                                                    'time_range': json.dumps({'since': since.isoformat(), 'until': until.isoformat()})}))
+        first.append((account, 'campaign', 'days', {'level': 'campaign', 'fields': 'campaign_id,spend,impressions,actions',
+                                                     'time_increment': 1, 'time_range': span('all_time')}))
+        first.append(job(account, 'campaign', 'all_time'))
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results = list(pool.map(run, first))
 
-    def run(job):
-        account, level, preset, params = job
-        return job, insights(account, params, level + ' ' + preset, big=preset in ('all_time', 'days'))
-
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(run, jobs))
+    # Then only what can hold numbers: an account with no spend in a period isn't asked about it.
+    spent_on = {}
+    for (account, _, preset, _), rows in results:
+        if preset == 'days':
+            spent_on[account] = sorted({r.get('date_start') for r in rows if num(r.get('spend')) > 0 or num(r.get('impressions'), int) > 0})
+    second = []
+    for account in ACCOUNTS:
+        days = spent_on.get(account, [])
+        for preset in PRESETS:
+            since, until = (d.isoformat() for d in dates[preset])
+            if not any(since <= d <= until for d in days):
+                continue
+            for level in (('adset', 'ad') if preset == 'all_time' else ('campaign', 'adset', 'ad')):
+                second.append(job(account, level, preset))
+    log('  %d more reports for the periods that had spend' % len(second))
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results += list(pool.map(run, second))
 
     totals = {level: {p: [] for p in PRESETS} for level in ('campaign', 'adset', 'ad')}
     names = {'campaign': {}, 'adset': {}, 'ad': {}}

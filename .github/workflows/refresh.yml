@@ -46,21 +46,26 @@ jobs:
         with:
           node-version: '22'
 
+      # Meta sometimes turns requests down for a while. Then this run keeps the last page and stops quietly;
+      # the last step fails (and GitHub emails) only when the page has gone 12 hours without an update.
       - name: Pull the numbers from Meta
+        id: fetch
         if: steps.token.outputs.ready == 'true'
+        continue-on-error: true
+        timeout-minutes: 30
         env:
           META_TOKEN: ${{ secrets.META_TOKEN }}
           ATHOME_SHEET_CSV_URL: ${{ secrets.ATHOME_SHEET_CSV_URL }}
         run: python3 scripts/fetch_meta.py --out data/snapshot.json
 
       - name: Lock the page with the password
-        if: steps.token.outputs.ready == 'true'
+        if: steps.token.outputs.ready == 'true' && steps.fetch.outcome == 'success'
         env:
           PAGE_PASSWORD: ${{ secrets.PAGE_PASSWORD }}
         run: node scripts/build.mjs --data data/snapshot.json --out out
 
       - name: Publish to the gh-pages branch
-        if: steps.token.outputs.ready == 'true'
+        if: steps.token.outputs.ready == 'true' && steps.fetch.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -73,3 +78,16 @@ jobs:
           git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" gh-pages
           # Only the latest version is kept, so the branch doesn't grow. Ask Pages to publish it.
           gh api -X POST "repos/${{ github.repository }}/pages/builds" --silent || true
+
+      - name: Check the page isn't going stale
+        if: steps.token.outputs.ready == 'true' && steps.fetch.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh api "repos/${{ github.repository }}/commits/gh-pages" -q .commit.committer.date)
+          age=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 3600 ))
+          echo "Meta didn't answer this time; the page keeps the numbers from $last ($age hours ago)." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$age" -ge 12 ]; then
+            echo "::error::The dashboard hasn't updated for $age hours. Check this run's 'Pull the numbers from Meta' step."
+            exit 1
+          fi
