@@ -86,16 +86,26 @@ def pages(path, params):
 
 
 def insights(account, params, label, big=False):
-    """One insights report. Short periods are asked for directly. Big ones (all time, day by day) run as a
-    background job on Meta's side so they don't time out; a job that stalls is started again, up to 3 times."""
+    """One insights report. Short periods are asked for directly; if Meta turns that down, or the report is
+    big (all time, day by day), it runs as a background job on Meta's side instead, so it doesn't time out.
+    A job that stalls is started again, up to 3 times."""
     body = {'use_unified_attribution_setting': 'true', 'limit': 500}
     body.update(params)
     if not big:
-        rows = list(pages('act_%s/insights' % account, body))
-        log('  %-16s %-26s %6d rows' % (ACCOUNTS[account], label, len(rows)))
-        return rows
+        try:
+            rows = list(pages('act_%s/insights' % account, body))
+            log('  %-16s %-26s %6d rows' % (ACCOUNTS[account], label, len(rows)))
+            return rows
+        except RuntimeError:
+            log('  %-16s %-26s too heavy to ask directly, queuing it at Meta' % (ACCOUNTS[account], label))
     for attempt in range(3):
-        run = call('act_%s/insights' % account, body, method='POST')['report_run_id']
+        try:
+            run = call('act_%s/insights' % account, body, method='POST')['report_run_id']
+        except RuntimeError:
+            if attempt == 2:
+                raise
+            time.sleep(30)
+            continue
         started = time.time()
         done = False
         while time.time() - started < 480:
@@ -281,7 +291,7 @@ def main():
         account, level, preset, params = job
         return job, insights(account, params, level + ' ' + preset, big=preset in ('all_time', 'days'))
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(run, jobs))
 
     totals = {level: {p: [] for p in PRESETS} for level in ('campaign', 'adset', 'ad')}
