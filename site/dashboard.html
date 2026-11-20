@@ -96,6 +96,9 @@ th[aria-sort="descending"] .oh-sort, th[aria-sort="ascending"] .oh-sort { color:
   </header>
 
   <div class="oh-controls" id="controls">
+    <label class="oh-field" for="oh-purpose">Purpose
+      <select class="dash-select" id="oh-purpose" data-draw="purpose-select" data-source="named_campaigns"></select>
+    </label>
     <label class="oh-field oh-field--camp" for="oh-camp">Campaign
       <select class="dash-select" id="oh-camp" data-draw="camp-select" data-source="named_campaigns"></select>
     </label>
@@ -182,7 +185,7 @@ th[aria-sort="descending"] .oh-sort, th[aria-sort="ascending"] .oh-sort { color:
         <table class="oh-table is-pickable" id="campaign-table" aria-label="Meta campaigns" data-source="campaigns" data-row-key="id">
           <thead><tr>
             <th data-field="name" aria-sort="none"><button class="oh-sort" type="button" data-sort="name">Meta campaign</button></th>
-            <th class="oh-purpose" data-field="type_label" aria-sort="none"><button class="oh-sort" type="button" data-sort="type_label">Purpose</button></th>
+            <th class="oh-purpose" data-field="purpose_label" aria-sort="none"><button class="oh-sort" type="button" data-sort="purpose_label">Purpose</button></th>
             <th data-field="effective_status">Status</th>
             <th data-field="amount_spent" aria-sort="none"><button class="oh-sort" type="button" data-sort="amount_spent">Spend</button></th>
             <th data-field="lead" aria-sort="none"><button class="oh-sort" type="button" data-sort="lead">Leads</button></th>
@@ -466,10 +469,23 @@ const CAMPAIGN_TYPES = {
   toddler: { label: 'Toddler club', purpose: 'Enquiries', forText: 'for toddler club enquiries', all: 'All toddler club campaigns', who: 'Toddler club campaigns' },
   summer: { label: 'Summer camp', purpose: 'Enquiries', forText: 'for summer camp enquiries and bookings', all: 'All summer camp campaigns', who: 'Summer camp campaigns' },
   hiring: { label: 'Hiring', purpose: 'Hiring', forText: 'for job applicants', all: 'All hiring campaigns', who: 'Hiring campaigns' },
-  training: { label: 'Teacher training', purpose: 'Enquiries', forText: 'for teacher training course enquiries', all: 'All teacher training campaigns', who: 'Teacher training campaigns' },
+  training: { label: 'Teacher training', purpose: 'Hiring', forText: 'for teacher training applicants', all: 'All teacher training campaigns', who: 'Teacher training campaigns' },
+  athome: { label: 'At-Home', purpose: 'Ticket sales', forText: 'for At-Home class bookings', all: 'All At-Home campaigns', who: 'At-Home campaigns' },
   brand: { label: 'Brand & boosted posts', purpose: null, forText: 'for awareness', all: 'All brand campaigns & boosted posts', who: 'Brand campaigns and boosted posts' },
   other: { label: 'Other', purpose: null, forText: 'with no set purpose', all: 'All other campaigns', who: 'Other campaigns' },
 };
+// The Purpose filter: the team's own grouping of the kinds above. Other shows only where an old campaign fits none of them.
+const PURPOSES = [
+  { key: 'preschool', label: 'Preschool', types: ['preschool', 'toddler'] },
+  { key: 'afterschool', label: 'Afterschool', types: ['afterschool', 'summer'] },
+  { key: 'athome', label: 'AtHome', types: ['athome'] },
+  { key: 'events', label: 'Events', types: ['event'] },
+  { key: 'brand', label: 'Brand Campaigns', types: ['brand'] },
+  { key: 'hiring', label: 'Hiring', types: ['hiring', 'training'] },
+  { key: 'other', label: 'Other', types: ['other'] },
+];
+const purposeOf = (type) => PURPOSES.find((x) => x.types.includes(type)) || PURPOSES[PURPOSES.length - 1];
+const purposeByKey = (key) => PURPOSES.find((x) => x.key === key);
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 // Festivals and events keep one name per year, whichever ad account ran them.
 const CAMPAIGN_EVENTS = [
@@ -496,7 +512,9 @@ const nameCampaign = (c, teamNames) => {
   const month = year ? MONTH_NAMES[Number(ym.slice(5, 7)) - 1] + ' ' + year : '';
   const auto = (() => {
     const by = (type, words) => ({ type, campaign: words.trim() });
-    if (/^instagram_post/.test(n)) return by('brand', 'Boosted posts ' + month);
+    // Boosted Instagram posts, including those Meta named in Bengali ("Instagram পোস্ট").
+    if (/^instagram(_|$)/.test(n)) return by('brand', 'Boosted posts ' + month);
+    if (/(^|_)at_?home(_|$)/.test(n)) return by('athome', 'At-Home ' + month);
     if (/training_program|teacher_training/.test(n)) return by('training', 'Teacher training ' + month);
     // Openhouse Temp runs hiring; in Sep–Oct 2025 it also ran copies of sales campaigns, marked Temp, 1mile or Autoflow.
     const salesCopy = /(^|_)temp(_|$)|autoflow|1mile/.test(n) || (/toddler|playdate|(^|_)ptp(_|$)|(^|_)eca(_|$)/.test(n) && !/hiring/.test(n));
@@ -510,10 +528,15 @@ const nameCampaign = (c, teamNames) => {
         .join(' ');
       return by('event', theme ? theme + ' playdate ' + year : 'Playdates ' + month);
     }
-    if (/toddler|(^|_)ptp(_|$)/.test(n)) return by('toddler', 'Toddler club ' + month);
-    if (/(^|_)(eca|as\d\d|activity_club|robotics|music|musical|public_speaking|karate|workshop|puppets|ec_club|academics|chess)(_|$)|after_?school/.test(n)) return by('afterschool', 'Afterschool ' + month);
-    if (/preschool|daycare|early_years|admission|readiness/.test(n)) return by('preschool', 'Preschool admissions ' + month);
-    if (/brand|awareness/.test(n)) return by('brand', 'Brand awareness ' + month);
+    if (/toddler|(^|_)ptp(_|$)|integrated_program|ages_1to3/.test(n)) return by('toddler', 'Toddler club ' + month);
+    // Before June 2025, trial classes and activities were named Trials, Extra curricular, Learning club, Art or Robo.
+    if (/(^|_)(eca|as\d\d|activity_club|robotics|robo|art|music|musical|public_speaking|karate|workshop|puppets|ec_club|academics|chess|trials?|learning_club|learning_centre|dance|puppets?|keyboard|japanese|publice_speaking)(_|$)|after_?school|extra_curricular/.test(n)) return by('afterschool', 'Afterschool ' + month);
+    if (/preschool|daycare|dropincare|drop_in_care|early_years|admission|readiness|centre_?tour/.test(n)) return by('preschool', 'Preschool admissions ' + month);
+    // Ticket sales paid on the spot for a playdate or event.
+    if (/direct_payment|(^|_)event(_|$)|oh_play/.test(n)) return by('event', 'Playdates ' + month);
+    // Explore and Discovery days, birthdays and competitions were one-time events.
+    if (/explor|discovery|birthday|competition|supervillain/.test(n)) return by('event', 'Events ' + month);
+    if (/brand|aware/.test(n)) return by('brand', 'Brand awareness ' + month);
     return by('other', 'Other campaigns ' + month);
   })();
   const named = team ? { campaign: team.campaign, type: team.type || auto.type, by: 'Campaign names list' } : { ...auto, by: 'Naming rules' };
@@ -548,6 +571,8 @@ dash.calc('programs', {
         campaign: named.campaign,
         type: named.type,
         type_label: CAMPAIGN_TYPES[named.type].label,
+        purpose_key: purposeOf(named.type).key,
+        purpose_label: purposeOf(named.type).label,
         key: named.key,
         named_by: named.by,
       };
@@ -558,7 +583,7 @@ dash.calc('programs', {
 dash.calc('named_campaigns', {
   inputs: ['programs'],
   title: 'Campaign list',
-  description: 'One row for each named campaign, such as Halloween 2026, and one for each kind of campaign, such as All afterschool campaigns: how many Meta campaigns it holds, in which accounts, when the first and the last of them started, and their Meta campaign IDs. The Campaign filter lists these.',
+  description: 'One row for each named campaign, such as Halloween 2026, for each purpose, such as All Hiring campaigns, and for each kind of campaign: how many Meta campaigns it holds, in which accounts, when the first and the last of them started, and their Meta campaign IDs. The Purpose and Campaign filters list these.',
   fn: (programs) => {
     const groups = {};
     const add = (key, level, campaign, who, r) => {
@@ -572,24 +597,29 @@ dash.calc('named_campaigns', {
     for (const r of programs) {
       add(r.key, 'campaign', r.campaign, r.campaign, r);
       add('type:' + r.type, 'type', CAMPAIGN_TYPES[r.type].all, CAMPAIGN_TYPES[r.type].who, r);
+      const purpose = purposeOf(r.type);
+      add('purpose:' + purpose.key, 'purpose', 'All ' + purpose.label + ' campaigns', purpose.label + ' campaigns', r);
     }
     const listed = (names) => (names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names.join(''));
     return Object.values(groups)
-      .map((g) => ({ ...g, ids: g.ids.sort(), accounts: listed(g.account_ids.map((id) => PORTFOLIO_NAMES[id] || 'Account ' + id)) }))
-      .sort((a, b) => (a.level !== b.level ? (a.level === 'type' ? -1 : 1) : a.first_start === b.first_start ? a.campaign.localeCompare(b.campaign) : a.first_start < b.first_start ? 1 : -1));
+      .map((g) => ({ ...g, purpose_key: purposeOf(g.type).key, ids: g.ids.sort(), accounts: listed(g.account_ids.map((id) => PORTFOLIO_NAMES[id] || 'Account ' + id)) }))
+      .sort((a, b) => (a.level !== b.level ? (a.level === 'purpose' ? -1 : b.level === 'purpose' ? 1 : a.level === 'type' ? -1 : 1) : a.first_start === b.first_start ? a.campaign.localeCompare(b.campaign) : a.first_start < b.first_start ? 1 : -1));
   },
 });
 
 dash.calc('campaigns_meta', {
   inputs: ['camp_oh2', 'camp_temp', 'camp_backup', 'camp_oh4', 'campaign_names', 'ticket_prices'],
   title: 'Meta campaigns as Meta reports them',
-  description: 'Meta campaigns from the four Openhouse ad accounts that spent, got leads or purchases in the period, or are running, each with the named campaign it belongs to (from the Campaign names list, or else the naming rules) and its purpose: Hiring; Ticket sales for playdates, events and any campaign with a ticket price; Enquiries for preschool admissions, afterschool, toddler club, summer camp and teacher training. Link CTR = link clicks ÷ impressions; cost per link click, lead and purchase = spend ÷ that count; CPM = spend per 1,000 impressions; frequency = impressions ÷ reach.',
+  description: 'Meta campaigns from the four Openhouse ad accounts that spent, got leads or purchases in the period, or are running (only one purpose’s when the Purpose filter is set), each with the named campaign it belongs to (from the Campaign names list, or else the naming rules), its purpose (Preschool, Afterschool, AtHome, Events, Brand Campaigns or Hiring) and what it counts towards: Hiring for hiring and teacher training; Ticket sales for playdates, events, At-Home and any campaign with a ticket price; Enquiries for preschool admissions, afterschool, toddler club and summer camp. Link CTR = link clicks ÷ impressions; cost per link click, lead and purchase = spend ÷ that count; CPM = spend per 1,000 impressions; frequency = impressions ÷ reach.',
   fn: (openhouse2, openhouseTemp, openhouseBackup, openhouse4, campaignNames, ticketPrices) => {
     const teamNames = teamNamesFrom(campaignNames);
     const priced = new Set(ticketPrices.filter((p) => String(p.price_before_gst ?? '').replace(/[^0-9.]/g, '') !== '').map((p) => String(p.campaign_id).trim()));
     const rate = (part, whole, scale = 1) => (part != null && whole > 0 ? Math.round(((part * scale) / whole) * 100) / 100 : null);
+    const picked = String(dash.params().prog || '');
+    const purpose = picked.startsWith('purpose:') ? picked.slice(8) : null;
     return [...openhouse2, ...openhouseTemp, ...openhouseBackup, ...openhouse4]
       .filter((c) => (c.amount_spent || 0) > 0 || (c.lead || 0) > 0 || (c.omni_purchase || 0) > 0 || c.effective_status === 'ACTIVE')
+      .filter((c) => !purpose || purposeOf(nameCampaign(c, teamNames).type).key === purpose)
       .map((c) => {
         const named = nameCampaign(c, teamNames);
         const type = CAMPAIGN_TYPES[named.type];
@@ -604,6 +634,7 @@ dash.calc('campaigns_meta', {
           cost_per_omni_purchase: rate(spend, c.omni_purchase),
           frequency: rate(c.impressions, c.reach),
           campaign: named.campaign, campaign_key: named.key, type: named.type, type_label: type.label, purpose,
+          purpose_key: purposeOf(named.type).key, purpose_label: purposeOf(named.type).label,
         };
       });
   },
@@ -823,7 +854,7 @@ dash.calc('ad_tickets', {
   },
 });
 
-const KPI_DESCRIPTION = 'Spend, results and rates added up from the Meta campaigns shown (one named campaign’s when the Campaign filter is set), for each account and for all Openhouse accounts together. Hiring figures use the hiring campaigns. Enquiry figures use preschool admissions, afterschool, toddler club, summer camp and teacher training campaigns. Ticket-sales figures use playdate and event campaigns, any campaign with a ticket price and the At-Home campaign, boosts and video campaigns included; campaigns with purchases but no ticket price are left out of ticket sales and ROAS.';
+const KPI_DESCRIPTION = 'Spend, results and rates added up from the Meta campaigns shown (one named campaign’s when the Campaign filter is set), for each account and for all Openhouse accounts together. Hiring figures use the hiring and teacher training campaigns. Enquiry figures use preschool admissions, afterschool, toddler club and summer camp campaigns. Ticket-sales figures use playdate and event campaigns, any campaign with a ticket price and the At-Home campaign, boosts and video campaigns included; campaigns with purchases but no ticket price are left out of ticket sales and ROAS.';
 const kpisOf = (campaigns, ticketSalesByCampaign) => {
   const tickets = {};
   for (const t of ticketSalesByCampaign) tickets[t.id] = t;
@@ -1032,7 +1063,15 @@ const namedCampaign = (key) => {
   const d = dash.data('named_campaigns');
   return d.status === 'ok' ? (d.data || []).find((r) => r.key === key) : undefined;
 };
-const isOneCampaign = (p) => Boolean(p.prog) && !String(p.prog).startsWith('type:');
+const isOneCampaign = (p) => Boolean(p.prog) && !/^(type|purpose):/.test(String(p.prog));
+// The purpose the filters are on: picked itself, or the purpose of the picked campaign.
+const currentPurpose = (p) => {
+  const prog = String(p.prog || '');
+  if (!prog) return '';
+  if (prog.startsWith('purpose:')) return prog.slice(8);
+  const g = namedCampaign(prog);
+  return purposeOf(g ? g.type : prog.split(':')[0].replace(/^type$/, prog.split(':')[1] || '')).key;
+};
 
 // Every period runs up to and including today, counted in India time (the ad accounts' time zone).
 const todayInIndia = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -1170,7 +1209,7 @@ const markedValue = (source, field, where, text) => {
 const purposeCell = (r) => {
   const td = document.createElement('td');
   td.className = 'oh-purpose';
-  if (!r.type_label) {
+  if (!r.purpose_label) {
     td.classList.add('oh-dim');
     td.textContent = '—';
     return td;
@@ -1180,7 +1219,8 @@ const purposeCell = (r) => {
   const dot = document.createElement('i');
   const color = purposeColor(r.purpose);
   if (color) dot.style.background = color;
-  tag.append(dot, document.createTextNode(r.type_label));
+  tag.append(dot, document.createTextNode(r.purpose_label));
+  if (r.type_label && r.type_label !== r.purpose_label) tag.title = r.type_label;
   td.append(tag);
   return td;
 };
@@ -1282,10 +1322,11 @@ const creativesReady = (p) => {
 // or by week or month when that would be too many rows.
 const wantedGroupDaily = (p) => {
   const d = pick('campaigns').d;
-  if (!p.prog || p.gop !== 'IN' || d.status !== 'ok' || d.refreshing) return null;
+  const whole = String(p.prog || '').startsWith('purpose:');
+  if (!p.prog || (!whole && p.gop !== 'IN') || d.status !== 'ok' || d.refreshing) return null;
   const inGroup = new Set((p.gids || []).map(String));
   const rows = d.data || [];
-  if (rows.some((r) => !inGroup.has(r.id))) return null;
+  if (!whole && rows.some((r) => !inGroup.has(r.id))) return null;
   const ids = [...new Set(rows.filter((r) => (r.amount_spent || 0) > 0).map((r) => r.id))].sort().slice(0, 300);
   const days = Math.round((new Date(p.until + 'T00:00:00Z') - new Date(p.since + 'T00:00:00Z')) / 86400000) + 1;
   const n = Math.max(1, ids.length);
@@ -1310,7 +1351,8 @@ const pickCampaign = (key) => {
   const period = g.level === 'campaign'
     ? { range: 'campaign', since: g.first_start && g.first_start <= todayInIndia() ? g.first_start : todayInIndia(), until: todayInIndia() }
     : p.range === 'campaign' ? { range: 'last_30d', ...periodDates('last_30d') } : {};
-  dash.setParams({ prog: key, pname: g.who, gop: 'IN', gids: g.ids.length ? g.ids : ['0'], view: '', ...period, ...queryShape(period.range || p.range, key) });
+  const byIds = g.level === 'purpose' ? { gop: 'NOT_IN', gids: ['0'] } : { gop: 'IN', gids: g.ids.length ? g.ids : ['0'] };
+  dash.setParams({ prog: key, pname: g.who, ...byIds, view: '', ...period, ...queryShape(period.range || p.range, key) });
 };
 
 const openCampaign = (r) => {
@@ -1347,23 +1389,36 @@ dash.draw('who', (el) => {
   el.textContent = picked ? picked + (where ? ' in ' + where : '') : where || 'Openhouse';
 });
 
+dash.draw('purpose-select', (sel) => {
+  const p = dash.params();
+  const d = dash.data('named_campaigns');
+  const rows = d.status === 'ok' ? d.data || [] : [];
+  const current = currentPurpose(p);
+  // With an ad account chosen, list only the purposes that have campaigns in it.
+  const shown = PURPOSES.filter((x) => x.key === current || rows.some((r) => r.level === 'purpose' && r.key === 'purpose:' + x.key && (!p.acct || r.account_ids.includes(p.acct))));
+  sel.replaceChildren(new Option('All purposes', ''), ...shown.map((x) => new Option(x.label, x.key)));
+  if (document.activeElement !== sel) sel.value = current;
+  sel.onchange = () => pickCampaign(sel.value ? 'purpose:' + sel.value : '');
+});
+
 dash.draw('camp-select', (sel) => {
   const p = dash.params();
   const d = dash.data('named_campaigns');
   const rows = d.status === 'ok' ? d.data || [] : [];
-  const options = [new Option('All campaigns', '')];
-  if (!rows.some((r) => r.key === p.prog) && p.prog) options.push(new Option(p.pname || 'Picked campaign', p.prog));
-  for (const [code, t] of Object.entries(CAMPAIGN_TYPES)) {
-    // With an ad account chosen, list only the campaigns that ran in it.
-    const own = rows.filter((r) => r.type === code && (r.key === p.prog || !p.acct || r.account_ids.includes(p.acct)));
-    const named = own.filter((r) => r.level === 'campaign');
-    if (!named.length) continue;
-    const group = document.createElement('optgroup');
-    group.label = t.label + ' · ' + t.forText;
-    const all = own.find((r) => r.level === 'type');
-    if (all) group.append(new Option(all.campaign, all.key));
-    for (const r of named) group.append(new Option(r.campaign, r.key));
-    options.push(group);
+  const current = currentPurpose(p);
+  const purpose = purposeByKey(current);
+  const options = [purpose ? new Option('All ' + purpose.label + ' campaigns', 'purpose:' + purpose.key) : new Option('All campaigns', '')];
+  if (p.prog && !rows.some((r) => r.key === p.prog)) options.push(new Option(p.pname || 'Picked campaign', p.prog));
+  // Only the picked purpose's campaigns, each kind in its own group; with no purpose picked, every campaign by purpose.
+  for (const x of purpose ? [purpose] : PURPOSES) {
+    for (const code of x.types) {
+      const named = rows.filter((r) => r.level === 'campaign' && r.type === code && (r.key === p.prog || !p.acct || r.account_ids.includes(p.acct)));
+      if (!named.length) continue;
+      const group = document.createElement('optgroup');
+      group.label = purpose ? CAMPAIGN_TYPES[code].label : x.label + (x.types.length > 1 ? ' · ' + CAMPAIGN_TYPES[code].label : '');
+      for (const r of named) group.append(new Option(r.campaign, r.key));
+      options.push(group);
+    }
   }
   sel.replaceChildren(...options);
   if (document.activeElement !== sel) sel.value = p.prog || '';
@@ -1374,6 +1429,12 @@ dash.draw('camp-note', (el) => {
   const p = dash.params();
   const g = namedCampaign(p.prog);
   if (!g) { el.textContent = p.prog ? 'Getting the campaign list from Meta…' : ''; return; }
+  if (g.level === 'purpose') {
+    const b = document.createElement('b');
+    b.textContent = purposeByKey(g.purpose_key).label;
+    el.replaceChildren(b, document.createTextNode(' · every ' + purposeByKey(g.purpose_key).types.map((code) => CAMPAIGN_TYPES[code].label.toLowerCase()).join(' and ') + ' campaign in the period, in all four accounts unless one is picked.'));
+    return;
+  }
   const t = CAMPAIGN_TYPES[g.type];
   const started = g.first_start ? d3.utcFormat('%-d %b %Y')(new Date(g.first_start + 'T00:00:00Z')) : '';
   const count = markedValue('named_campaigns', 'meta_campaigns', 'key=' + g.key, FORMATS.count(g.meta_campaigns));
@@ -1507,7 +1568,7 @@ dash.draw('trend', {
     const sheetSales = dash.data('sheet_sales');
     const p = dash.params();
     const sheetIds = new Set(sheetSales.status === 'ok' ? (sheetSales.data || []).map((x) => x.id) : []);
-    const inGroup = grouped ? (p.gids || []).map(String) : null;
+    const inGroup = grouped ? (p.gdids || []).map(String) : null;
     const onlySheet = Boolean(inGroup && inGroup.length && inGroup.every((id) => sheetIds.has(id)));
     const bucketOf = (date) => {
       if (step === 'monthly') return date.slice(0, 8) + '01' < p.since ? p.since : date.slice(0, 8) + '01';
@@ -1632,7 +1693,7 @@ dash.draw('drill-sub', (el) => {
   el.textContent = c
     ? [
       c.campaign,
-      c.type_label,
+      c.purpose_label + (c.type_label && c.type_label !== c.purpose_label ? ' (' + c.type_label + ')' : ''),
       accountName(c.account_id),
       c.objective ? (OBJECTIVES[c.objective] || words(c.objective)) + ' objective' : '',
       (STATUSES[c.effective_status] || [words(c.effective_status)])[0],
@@ -1876,12 +1937,15 @@ dash.onData(() => {
     }
   }
 
+  if (String(p.prog).startsWith('type:')) { pickCampaign('purpose:' + purposeOf(String(p.prog).slice(5)).key); return; }
   // The Campaign filter sends the picked campaign's Meta campaign IDs; keep them in step with the campaign list.
   const picked = namedCampaign(p.prog);
   const list = dash.data('named_campaigns');
   if (p.prog && picked) {
-    const ids = picked.ids.length ? picked.ids : ['0'];
-    if (String(p.gids) !== String(ids) || p.gop !== 'IN' || p.pname !== picked.who) dash.setParams({ gids: ids, gop: 'IN', pname: picked.who });
+    const whole = picked.level === 'purpose';
+    const ids = whole ? ['0'] : picked.ids.length ? picked.ids : ['0'];
+    const op = whole ? 'NOT_IN' : 'IN';
+    if (String(p.gids) !== String(ids) || p.gop !== op || p.pname !== picked.who) dash.setParams({ gids: ids, gop: op, pname: picked.who });
   } else if (p.prog && list.status === 'ok' && !list.refreshing) {
     pickCampaign('');
   } else if (!p.prog && (p.gop !== 'NOT_IN' || String(p.gids) !== '0')) {
